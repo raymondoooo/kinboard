@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Shared calendar · Kinboard</title>
+  <style>
+    :root { --bg:#0f1117; --card:#1a1d27; --ink:#e7e9ee; --muted:#9aa0ad; --accent:#6366f1; --border:#2a2e3a; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+    .topbar {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 12px 18px; background: rgba(15,17,23,0.92); backdrop-filter: blur(6px);
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar .tb-name { font-weight: 700; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .today-btn {
+      flex: 0 0 auto; background: var(--accent); color: #fff; border: none;
+      border-radius: 8px; padding: 8px 14px; font-weight: 600; font-size: 0.82rem; cursor: pointer;
+    }
+    .wrap { max-width: 620px; margin: 0 auto; padding: 22px 18px 60px; }
+    .sub { color: var(--muted); font-size: 0.85rem; margin: 0 0 6px; }
+    .readonly-note { color: var(--muted); font-size: 0.78rem; margin: 0 0 22px; }
+    .day { margin-bottom: 18px; }
+    .day-head { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--border); scroll-margin-top: 60px; }
+    .day-head.today { color: var(--accent); }
+    .ev { background: var(--card); border: 1px solid var(--border); border-left-width: 3px; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; display: flex; gap: 10px; align-items: baseline; }
+    .ev .time { color: var(--muted); font-size: 0.8rem; min-width: 66px; flex: 0 0 66px; }
+    .ev .title { font-weight: 600; }
+    .ev .who { color: var(--muted); font-size: 0.8rem; }
+    .ev .loc { color: var(--muted); font-size: 0.8rem; display:block; margin-top:2px; }
+    .empty { color: var(--muted); text-align: center; padding: 40px 0; }
+    footer { margin-top: 40px; text-align: center; border-top: 1px solid var(--border); padding-top: 22px; }
+    footer a { color: var(--accent); text-decoration: none; font-weight: 600; }
+    footer .tag { color: var(--muted); font-size: 0.82rem; display:block; margin-bottom:6px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <span class="tb-name" id="tb-name">Shared calendar</span>
+    <button id="today-btn" class="today-btn" type="button" style="display:none">Today</button>
+  </div>
+  <div class="wrap">
+    <p class="sub" id="cal-sub"></p>
+    <p class="readonly-note">👀 View-only — you're seeing this family's upcoming events.</p>
+    <div id="agenda"></div>
+    <footer>
+      <span class="tag">Shared with Kinboard.</span>
+    </footer>
+  </div>
+
+  <script>
+    const token = location.pathname.split('/').filter(Boolean).pop();
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+
+    (async function () {
+      // The server pre-expands recurrences into a flat, date-sorted list within
+      // the family's next N days — this page is a pure renderer.
+      let data;
+      try {
+        const res = await fetch(`/api/share/${token}/events`);
+        if (!res.ok) throw new Error();
+        data = await res.json();
+      } catch {
+        document.getElementById('agenda').innerHTML = '<p class="empty">This share link is no longer active.</p>';
+        return;
+      }
+
+      const name = data.calendarName || 'Shared calendar';
+      document.getElementById('tb-name').textContent = name;
+      document.title = `${name} · Kinboard`;
+      document.getElementById('cal-sub').textContent = `Next ${data.windowDays || 180} days`;
+
+      const occ = data.occurrences || [];
+      const agenda = document.getElementById('agenda');
+      if (!occ.length) { agenda.innerHTML = '<p class="empty">No upcoming events.</p>'; return; }
+
+      const todayStr = data.today;
+      let curDay = null, dayEl = null;
+      for (const ev of occ) {
+        if (ev.date !== curDay) {
+          curDay = ev.date;
+          dayEl = document.createElement('div');
+          dayEl.className = 'day';
+          const label = new Date(ev.date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+          const isToday = ev.date === todayStr;
+          const head = document.createElement('p');
+          head.className = 'day-head' + (isToday ? ' today' : '');
+          if (isToday) head.id = 'today-anchor';
+          head.textContent = (isToday ? 'Today · ' : '') + label;
+          dayEl.appendChild(head);
+          agenda.appendChild(dayEl);
+        }
+        const row = document.createElement('div');
+        row.className = 'ev';
+        // Color-code by the event's person (member color); fall back to the
+        // neutral border when there's no assigned person/color.
+        row.style.borderLeftColor = ev.color || 'var(--border)';
+        const time = ev.timeLabel || 'All day';
+        row.innerHTML = `
+          <span class="time">${time}</span>
+          <span>
+            <span class="title">${esc(ev.title)}</span>
+            ${(ev.people && ev.people.length) ? `<span class="who"> · ${esc(ev.people.join(', '))}</span>` : ''}
+            ${ev.location ? `<span class="loc">📍 ${esc(ev.location)}</span>` : ''}
+          </span>`;
+        dayEl.appendChild(row);
+      }
+
+      // "Today" button jumps back to today's section after browsing ahead.
+      const anchor = document.getElementById('today-anchor');
+      const todayBtn = document.getElementById('today-btn');
+      if (anchor) {
+        todayBtn.style.display = '';
+        todayBtn.addEventListener('click', () => anchor.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      }
+    })();
+  </script>
+</body>
+</html>

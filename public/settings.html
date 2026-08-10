@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calendar settings — Kinboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f0f10;
+      --surface: #1a1a1d;
+      --surface-2: #232327;
+      --border: #2a2a2d;
+      --text: #e8e8ea;
+      --muted: #888;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --error: #f87171;
+      --success: #34d399;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      padding: 2rem 1rem 4rem;
+    }
+
+    .wrap { max-width: 620px; margin: 0 auto; }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg);
+      padding: 0.5rem 0;
+    }
+    .back-link {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+    .back-link:hover { color: var(--text); }
+    .logo { font-size: 1rem; font-weight: 600; color: var(--muted); }
+    .logo span { color: var(--accent); }
+
+    h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 1.5rem; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .card h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.3rem; }
+    .card .section-sub { font-size: 0.85rem; color: var(--muted); margin-bottom: 1.25rem; }
+
+    .field { margin-bottom: 1.1rem; }
+    label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .opt-note { text-transform: none; letter-spacing: normal; font-weight: 400; opacity: 0.6; }
+
+    input[type="text"], input[type="email"], input[type="date"], input[type="password"], select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.7rem 0.9rem;
+      color: var(--text);
+      font-size: 1rem;
+      outline: none;
+    }
+    input[type="text"]:focus, input[type="email"]:focus, input[type="date"]:focus, input[type="password"]:focus, select:focus { border-color: var(--accent); }
+    select { cursor: pointer; }
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
+
+    .row-2 { display: flex; gap: 0.75rem; }
+    .row-2 > * { flex: 1; }
+    .hint { font-size: 0.78rem; color: var(--muted); margin-top: 0.35rem; }
+
+    /* Emoji input */
+    input.emoji-input {
+      width: 3.4rem;
+      flex: 0 0 3.4rem;
+      text-align: center;
+      padding: 0.7rem 0.25rem;
+      font-size: 1.15rem;
+      cursor: pointer;
+    }
+
+    /* Color swatches */
+    .color-swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+    .swatch {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform 0.1s, border-color 0.1s;
+    }
+    .swatch:hover { transform: scale(1.15); }
+    .swatch.selected { border-color: #fff; transform: scale(1.1); }
+
+    /* Person / feed rows */
+    .item {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem;
+      margin-bottom: 0.85rem;
+    }
+    .item-line { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
+    .item-line input[type="text"]:not(.emoji-input) { flex: 1; }
+    .item-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+
+    .btn {
+      padding: 0.6rem 1rem;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.92rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .btn:hover { background: var(--accent-hover); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-sm { padding: 0.45rem 0.8rem; font-size: 0.84rem; }
+    .btn-ghost { background: var(--surface-2); color: var(--text); }
+    .btn-ghost:hover { background: #2e2e33; }
+    .btn-danger { background: none; color: var(--error); border: 1px solid transparent; }
+    .btn-danger:hover { background: rgba(248,113,113,0.1); }
+
+    .add-btn {
+      background: none;
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 0.88rem;
+      padding: 0.55rem 0.9rem;
+      width: 100%;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .add-btn:hover { border-color: var(--accent); color: var(--accent-hover); }
+    .section-actions { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem; }
+    .section-actions .add-btn { flex: 1; margin-top: 0; }
+
+    /* Theme picker */
+    .theme-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; }
+    .theme-opt {
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem;
+      cursor: pointer;
+      background: none;
+      text-align: center;
+      transition: border-color 0.12s, transform 0.1s;
+    }
+    .theme-opt:hover { transform: translateY(-1px); }
+    .theme-opt.selected { border-color: var(--accent-hover); }
+    .theme-chip { height: 34px; border-radius: 5px; margin-bottom: 0.35rem; }
+    .theme-name { font-size: 0.78rem; color: var(--text); }
+
+    /* Toggle */
+    .toggle-field { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .toggle-label { font-size: 0.92rem; color: var(--text); }
+    .toggle-desc { font-size: 0.78rem; color: var(--muted); margin-top: 0.2rem; }
+    .switch { position: relative; width: 46px; height: 26px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .switch .track { position: absolute; inset: 0; background: var(--border); border-radius: 13px; transition: background 0.15s; }
+    .switch .track::before {
+      content: ''; position: absolute; height: 20px; width: 20px; left: 3px; top: 3px;
+      background: #fff; border-radius: 50%; transition: transform 0.15s;
+    }
+    .switch input:checked + .track { background: var(--accent); }
+    .switch input:checked + .track::before { transform: translateX(20px); }
+
+    .toast {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(120%);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.7rem 1.2rem;
+      font-size: 0.9rem;
+      transition: transform 0.25s;
+      z-index: 50;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.err { border-color: var(--error); color: var(--error); }
+    .toast.ok { border-color: var(--success); color: var(--success); }
+
+    .muted { color: var(--muted); }
+    .hidden { display: none; }
+    .spinner { color: var(--muted); text-align: center; padding: 3rem; }
+
+    /* Category rows */
+    .cat-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.65rem 0.85rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 0.65rem;
+    }
+    .cat-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .cat-item-name {
+      font-size: 0.95rem;
+      font-weight: 500;
+      flex: 1;
+    }
+
+    /* Holiday checklist */
+    .holiday-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.4rem 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .holiday-check {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-size: 0.88rem;
+      cursor: pointer;
+      padding: 0.2rem 0;
+    }
+    .holiday-check input[type="checkbox"] { cursor: pointer; accent-color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <a class="back-link" href="/">← Back to calendar</a>
+      <span class="logo">Kin<span>board</span></span>
+      <button class="btn btn-sm" id="save-all">Save</button>
+    </div>
+
+    <!-- Loading -->
+    <div id="state-loading" class="spinner">Loading…</div>
+
+    <!-- Settings -->
+    <div id="state-main" class="hidden">
+      <h1 id="page-title">Calendar settings</h1>
+
+      <!-- Share & subscribe -->
+      <div class="card">
+        <h2>Share &amp; subscribe</h2>
+        <p class="section-sub">Give grandparents, sitters, or a co-parent a view-only link, or subscribe this calendar into Google/Apple Calendar so it shows up on everyone's phone. Anyone with a link can view — but not edit. Turn it off anytime.</p>
+
+        <label style="display:block;font-size:0.85rem;color:var(--muted);margin-bottom:0.25rem;">Auto-share events matching these words</label>
+        <p class="section-sub" style="margin-bottom:0.6rem;">Any event — yours or from an imported calendar — whose title contains one of these words is shared to the links below. Everything else stays private. Case-insensitive.</p>
+        <div id="kw-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:0.5rem;"></div>
+        <div class="section-actions">
+          <input id="kw-input" type="text" placeholder="e.g. Game" style="flex:1;min-width:0;" />
+          <button class="btn btn-sm btn-ghost" id="kw-add" type="button" style="flex:0 0 auto;width:auto;">Add</button>
+        </div>
+        <p class="hint" id="kw-suggest" style="margin-top:0.5rem;"></p>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:1.25rem 0;" />
+        <div id="share-off">
+          <button class="add-btn" id="share-generate-btn" type="button">Create share links</button>
+        </div>
+        <div id="share-on" style="display:none;">
+          <label style="display:block;font-size:0.85rem;color:var(--muted);margin-bottom:0.25rem;">View-only web link</label>
+          <div class="section-actions">
+            <input id="share-url" type="text" readonly style="flex:1;min-width:0;" />
+            <button class="btn btn-sm btn-ghost" type="button" style="flex:0 0 auto;width:auto;" onclick="copyShare('share-url')">Copy</button>
+          </div>
+          <label style="display:block;font-size:0.85rem;color:var(--muted);margin:0.75rem 0 0.25rem;">Calendar subscription (Google/Apple)</label>
+          <div class="section-actions">
+            <input id="ics-url" type="text" readonly style="flex:1;min-width:0;" />
+            <button class="btn btn-sm btn-ghost" type="button" style="flex:0 0 auto;width:auto;" onclick="copyShare('ics-url')">Copy</button>
+          </div>
+          <button class="add-btn" id="share-revoke-btn" type="button" style="margin-top:0.75rem;">Turn off sharing</button>
+        </div>
+      </div>
+
+      <!-- Family -->
+      <div class="card">
+        <h2>Family</h2>
+        <p class="section-sub">The people on this calendar. Each has a color and an optional emoji. (Everyone shares the one household password — this is just how they're labeled on events.)</p>
+        <div id="members-list"></div>
+        <div class="section-actions">
+          <button class="add-btn" id="add-member">+ Add a person</button>
+        </div>
+      </div>
+
+      <!-- Categories -->
+      <div class="card">
+        <h2>Categories</h2>
+        <p class="section-sub">Shared event types — assign calendars or events to these to color them as a group.</p>
+        <div id="categories-list"></div>
+      </div>
+
+      <!-- Holidays -->
+      <div class="card">
+        <h2>Holidays</h2>
+        <p class="section-sub">These appear automatically on your calendar on the right dates each year.</p>
+        <div class="holiday-grid" id="holiday-grid"></div>
+      </div>
+
+      <!-- Calendars -->
+      <div class="card">
+        <h2>Calendars</h2>
+        <p class="section-sub">Imported iCal feeds — school, sports, work. Assign each to a person or category.</p>
+        <div id="feeds-list"></div>
+        <button class="add-btn" id="add-feed">+ Add a calendar feed</button>
+      </div>
+
+      <!-- Import a calendar (one-time migration, not a live feed) -->
+      <div class="card">
+        <h2>Import a calendar</h2>
+        <p class="section-sub">One-time migration from Google, Apple, Outlook, or any iCal link — copies events in as native, fully-editable events on this calendar. Unlike a feed above, it does not stay live-synced.</p>
+
+        <div class="field">
+          <label for="import-url">iCal URL</label>
+          <input id="import-url" type="text" placeholder="https://calendar.google.com/calendar/ical/…" />
+        </div>
+
+        <div class="field">
+          <label for="import-person">Assign unmatched events to</label>
+          <select id="import-person"></select>
+        </div>
+
+        <div class="field">
+          <label for="import-range">Date range</label>
+          <select id="import-range">
+            <option value="future" selected>All future events</option>
+            <option value="year">This year forward</option>
+            <option value="all">All events</option>
+            <option value="custom">Custom range…</option>
+          </select>
+        </div>
+
+        <div class="row-2" id="import-custom-range" style="display:none;">
+          <div class="field">
+            <label for="import-start">From</label>
+            <input id="import-start" type="date" />
+          </div>
+          <div class="field">
+            <label for="import-end">To</label>
+            <input id="import-end" type="date" />
+          </div>
+        </div>
+
+        <div class="section-actions">
+          <button class="add-btn" id="import-preview-btn" type="button">Preview</button>
+          <button class="btn btn-sm" id="import-run-btn" type="button" style="display:none;">Import now</button>
+        </div>
+        <p class="hint" id="import-result" style="display:none;"></p>
+      </div>
+
+      <!-- Calendar settings -->
+      <div class="card">
+        <h2>Calendar</h2>
+        <p class="section-sub">Name, weather, layout, theme, and visibility.</p>
+
+        <div class="field">
+          <label>Calendar name</label>
+          <input type="text" id="set-name" maxlength="60" />
+        </div>
+
+        <div class="field">
+          <label>ZIP code <span class="opt-note">· for weather</span></label>
+          <div class="row-2">
+            <input type="text" id="set-zip" placeholder="90210" maxlength="5" inputmode="numeric" />
+            <select id="set-units">
+              <option value="fahrenheit">°F</option>
+              <option value="celsius">°C</option>
+            </select>
+          </div>
+          <div class="hint">Leave blank to hide weather. Looked up via the free, keyless Zippopotam.us + Open-Meteo APIs.</div>
+        </div>
+
+        <div class="field row-2">
+          <div>
+            <label>Time zone</label>
+            <select id="set-tz"></select>
+          </div>
+          <div>
+            <label>Week starts on</label>
+            <select id="set-firstday">
+              <option value="0">Sunday</option>
+              <option value="1">Monday</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Weeks to show</label>
+          <select id="set-weeks">
+            <option value="2">2 weeks</option>
+            <option value="3">3 weeks</option>
+            <option value="4">4 weeks</option>
+            <option value="5">5 weeks</option>
+            <option value="6">6 weeks</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Theme</label>
+          <div class="theme-grid" id="theme-grid"></div>
+        </div>
+
+        <div class="field">
+          <div class="toggle-field">
+            <div>
+              <div class="toggle-label">Public calendar</div>
+              <div class="toggle-desc">Anyone with the link can view (read-only), no password needed. Off = the household password is required to view.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="set-public" />
+              <span class="track"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notifications -->
+      <div class="card">
+        <h2>Notifications</h2>
+        <p class="section-sub">Get a push notification on this device for today's schedule, upcoming events, and anything newly added for the people you care about.</p>
+
+        <!-- Shown when the browser can't do Web Push (plain HTTP, or unsupported). -->
+        <div id="push-unsupported" class="hidden">
+          <p class="hint" id="push-unsupported-msg" style="margin-top:0;"></p>
+        </div>
+
+        <div id="push-supported" class="hidden">
+          <div id="push-off">
+            <button class="add-btn" id="push-enable-btn" type="button">Turn on notifications for this device</button>
+            <p class="hint" id="push-denied-msg" class="hidden" style="display:none;"></p>
+          </div>
+
+          <div id="push-on" style="display:none;">
+            <div class="field">
+              <label for="push-label">This device's name</label>
+              <input type="text" id="push-label" maxlength="60" placeholder="Dad's phone" />
+            </div>
+
+            <div class="field">
+              <label>Notify me about</label>
+              <p class="section-sub" style="margin-bottom:0.6rem;">Pick whose events this device should be notified about. Choose nobody to get everything.</p>
+              <div id="push-people" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+            </div>
+
+            <div class="field">
+              <label for="push-lead">Remind me before an event</label>
+              <select id="push-lead">
+                <option value="0">At start time</option>
+                <option value="15">15 minutes before</option>
+                <option value="30">30 minutes before</option>
+                <option value="60" selected>1 hour before</option>
+                <option value="120">2 hours before</option>
+                <option value="1440">1 day before</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <div class="toggle-field">
+                <div>
+                  <div class="toggle-label">Daily digest</div>
+                  <div class="toggle-desc">A morning summary of the day's schedule.</div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="push-digest" checked />
+                  <span class="track"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="field">
+              <div class="toggle-field">
+                <div>
+                  <div class="toggle-label">Event reminders</div>
+                  <div class="toggle-desc">A heads-up before each event starts.</div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="push-reminders" checked />
+                  <span class="track"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="field">
+              <div class="toggle-field">
+                <div>
+                  <div class="toggle-label">New events</div>
+                  <div class="toggle-desc">Tells you right away when someone adds an event for you.</div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="push-onadd" checked />
+                  <span class="track"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="section-actions">
+              <button class="btn btn-sm btn-ghost" id="push-test-btn" type="button" style="flex:0 0 auto;width:auto;">Send test notification</button>
+              <button class="btn btn-sm btn-danger" id="push-disable-btn" type="button" style="flex:0 0 auto;width:auto;">Turn off on this device</button>
+            </div>
+          </div>
+
+          <hr style="border:none;border-top:1px solid var(--border);margin:1.25rem 0;" />
+          <label style="display:block;font-size:0.85rem;color:var(--muted);margin-bottom:0.5rem;">Devices receiving notifications</label>
+          <div id="push-devices"></div>
+        </div>
+      </div>
+
+      <!-- Account -->
+      <div class="card">
+        <h2>Household password</h2>
+        <p class="section-sub">Everyone who knows this password can view and edit the calendar. Changing it signs out every other device.</p>
+        <div class="field">
+          <label>Current password</label>
+          <input type="password" id="pw-current" autocomplete="current-password" />
+        </div>
+        <div class="field">
+          <label>New password</label>
+          <input type="password" id="pw-new" autocomplete="new-password" minlength="6" />
+        </div>
+        <button class="btn" id="pw-save" type="button">Change password</button>
+      </div>
+
+      <!-- Donate -->
+      <div class="card" id="donate-card" style="display:none;">
+        <h2>Support Kinboard</h2>
+        <p class="section-sub">Kinboard is free, self-hosted software. If it's useful to your family, a small donation helps keep it maintained.</p>
+        <a class="add-btn" id="donate-link" href="#" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;">Donate →</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/holidays.js"></script>
+  <script src="/kb-device.js"></script>
+  <script>
+    const COLORS = ['#dc2626','#2563eb','#16a34a','#f97316','#9333ea','#db2777','#0d9488','#ca8a04','#0891b2','#64748b'];
+
+    // HOLIDAY_DEFS is loaded from /holidays.js.
+    const THEMES = [
+      { id:'light',     name:'Light',     chip:'linear-gradient(135deg,#ffffff,#e0e7ff)' },
+      { id:'dark',      name:'Dark',      chip:'linear-gradient(135deg,#1a1a1d,#3dd6e0)' },
+      { id:'glitter',   name:'Glitter',   chip:'linear-gradient(135deg,#ff9ec7,#c084fc,#a78bfa)' },
+      { id:'sports',    name:'Sports',    chip:'linear-gradient(135deg,#16a34a,#22c55e,#facc15)' },
+      { id:'beach',     name:'Beach',     chip:'linear-gradient(135deg,#fde68a,#2dd4bf,#fb7185)' },
+      { id:'forest',    name:'Forest',    chip:'linear-gradient(135deg,#14532d,#15803d,#84cc16)' },
+      { id:'mountains', name:'Mountains', chip:'linear-gradient(135deg,#64748b,#94a3b8,#e2e8f0)' },
+    ];
+    const TZS = [
+      ['America/New_York','Eastern (New York)'], ['America/Chicago','Central (Chicago)'],
+      ['America/Denver','Mountain (Denver)'], ['America/Phoenix','Arizona (Phoenix)'],
+      ['America/Los_Angeles','Pacific (Los Angeles)'], ['America/Anchorage','Alaska (Anchorage)'],
+      ['Pacific/Honolulu','Hawaii (Honolulu)'], ['America/Toronto','Toronto'],
+      ['America/Vancouver','Vancouver'], ['Europe/London','London'],
+      ['Europe/Paris','Central Europe (Paris)'], ['Australia/Sydney','Sydney'],
+    ];
+
+    let selectedTheme = 'dark';
+    let members = [];   // {id, display_name, color, emoji, member_type}
+    let feeds = [];     // {id, url, name, fixed_person, emoji}
+
+    function show(state) {
+      ['loading','main'].forEach(s =>
+        document.getElementById('state-' + s).classList.toggle('hidden', s !== state));
+    }
+
+    let toastTimer = null;
+    function toast(msg, kind) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast show' + (kind ? ' ' + kind : '');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { t.className = 'toast' + (kind ? ' ' + kind : ''); }, 2400);
+    }
+
+    // The session lives in an httpOnly cookie sent automatically with
+    // same-origin requests — no bearer token to attach.
+    async function api(method, path, body) {
+      const res = await fetch(path, {
+        method,
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      if (res.status === 401 || res.status === 503) {
+        // Not signed in (or setup isn't done yet) — the calendar page owns the
+        // sign-in overlay, so send them there instead of duplicating it here.
+        location.href = '/';
+        throw new Error('redirecting');
+      }
+      let data = {};
+      try { data = await res.json(); } catch { /* no body */ }
+      if (!res.ok) throw new Error(data.error || ('Request failed (' + res.status + ')'));
+      return data;
+    }
+
+    // ── Share links + ICS feed ──
+    function renderShare(data) {
+      const on = document.getElementById('share-on');
+      const off = document.getElementById('share-off');
+      if (data && data.token) {
+        document.getElementById('share-url').value = data.shareUrl;
+        document.getElementById('ics-url').value = data.icsUrl;
+        on.style.display = '';
+        off.style.display = 'none';
+      } else {
+        on.style.display = 'none';
+        off.style.display = '';
+      }
+    }
+    async function loadShareState() {
+      try { renderShare(await api('GET', '/api/share/status')); } catch { /* leave default (off) */ }
+    }
+    async function generateShare() {
+      try { renderShare(await api('POST', '/api/share/generate')); toast('Share links created', 'ok'); }
+      catch (e) { toast('Could not create links: ' + e.message, 'err'); }
+    }
+    async function revokeShare() {
+      if (!confirm('Turn off sharing? Existing links will stop working immediately.')) return;
+      try { await api('POST', '/api/share/revoke'); renderShare({ token: null }); toast('Sharing turned off', 'ok'); }
+      catch (e) { toast('Could not turn off sharing: ' + e.message, 'err'); }
+    }
+    function copyShare(id) {
+      const el = document.getElementById(id);
+      el.select();
+      navigator.clipboard?.writeText(el.value).then(() => toast('Copied'), () => toast('Copy failed', 'error'));
+    }
+    document.getElementById('share-generate-btn')?.addEventListener('click', generateShare);
+    document.getElementById('share-revoke-btn')?.addEventListener('click', revokeShare);
+
+    // ── Share keywords (auto-share by title) ──
+    let shareKeywords = [];
+    const KW_SUGGESTIONS = ['Game', 'Birthday', 'Graduation', 'Recital', 'Concert', 'Championship', 'Tournament', 'Ceremony'];
+
+    function renderKeywords() {
+      const wrap = document.getElementById('kw-chips');
+      wrap.innerHTML = '';
+      shareKeywords.forEach(w => {
+        const chip = document.createElement('span');
+        chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:0.85rem;';
+        chip.textContent = w;
+        const x = document.createElement('button');
+        x.type = 'button'; x.textContent = '×';
+        x.style.cssText = 'background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.1rem;line-height:1;padding:0;';
+        x.setAttribute('aria-label', 'Remove ' + w);
+        x.addEventListener('click', () => { shareKeywords = shareKeywords.filter(k => k !== w); renderKeywords(); });
+        chip.appendChild(x);
+        wrap.appendChild(chip);
+      });
+      const remaining = KW_SUGGESTIONS.filter(s => !shareKeywords.some(k => k.toLowerCase() === s.toLowerCase()));
+      const sug = document.getElementById('kw-suggest');
+      sug.innerHTML = remaining.length ? 'Suggestions: ' : '';
+      remaining.forEach(s => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.textContent = '+ ' + s;
+        b.style.cssText = 'background:none;border:1px dashed var(--border);border-radius:999px;color:var(--muted);cursor:pointer;font-size:0.78rem;padding:2px 8px;margin:0 4px 4px 0;';
+        b.addEventListener('click', () => addKeyword(s));
+        sug.appendChild(b);
+      });
+    }
+    function addKeyword(raw) {
+      const w = (raw || '').trim().slice(0, 40);
+      if (!w) return;
+      if (!shareKeywords.some(k => k.toLowerCase() === w.toLowerCase())) shareKeywords.push(w);
+      document.getElementById('kw-input').value = '';
+      renderKeywords();
+    }
+    document.getElementById('kw-add')?.addEventListener('click', () => addKeyword(document.getElementById('kw-input').value));
+    document.getElementById('kw-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword(e.target.value); } });
+
+    // ── Swatches ──
+    function buildSwatches(container, color) {
+      container.innerHTML = '';
+      const valid = typeof color === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(color);
+      const palette = (valid && !COLORS.includes(color)) ? [color, ...COLORS] : COLORS;
+      palette.forEach(c => {
+        const s = document.createElement('button');
+        s.type = 'button';
+        s.className = 'swatch' + (c === color ? ' selected' : '');
+        s.style.background = c;
+        s.dataset.color = c;
+        s.addEventListener('click', () => {
+          container.querySelectorAll('.swatch').forEach(x => x.classList.remove('selected'));
+          s.classList.add('selected');
+        });
+        container.appendChild(s);
+      });
+    }
+    function selectedColor(container) {
+      const el = container.querySelector('.swatch.selected') || container.querySelector('.swatch');
+      return el ? el.dataset.color : '#6366f1';
+    }
+
+    // ── Members ──
+    function renderMembers() {
+      const list = document.getElementById('members-list');
+      list.innerHTML = '';
+      members.filter(m => m.member_type !== 'category').forEach(m => list.appendChild(memberRow(m)));
+    }
+
+    function renderCategories() {
+      const list = document.getElementById('categories-list');
+      list.innerHTML = '';
+      members.filter(m => m.member_type === 'category').forEach(m => list.appendChild(categoryRow(m)));
+    }
+
+    function categoryRow(m) {
+      const item = document.createElement('div');
+      item.className = 'cat-item';
+      item.dataset.id = m.id || '';
+
+      const dot = document.createElement('div');
+      dot.className = 'cat-dot';
+      dot.style.background = m.color || '#6366f1';
+
+      const name = document.createElement('div');
+      name.className = 'cat-item-name';
+      name.textContent = m.display_name;
+
+      const swatches = document.createElement('div');
+      swatches.className = 'color-swatches';
+      buildSwatches(swatches, m.color || COLORS[0]);
+      swatches.addEventListener('click', () => {
+        dot.style.background = selectedColor(swatches);
+      });
+
+      item.appendChild(dot);
+      item.appendChild(name);
+      item.appendChild(swatches);
+      return item;
+    }
+
+    function memberRow(m) {
+      const item = document.createElement('div');
+      item.className = 'item';
+      item.dataset.id = m.id || '';
+
+      const line = document.createElement('div');
+      line.className = 'item-line';
+      const name = document.createElement('input');
+      name.type = 'text'; name.className = 'm-name'; name.maxLength = 30;
+      name.placeholder = 'Name'; name.value = m.display_name || '';
+      const emoji = document.createElement('input');
+      emoji.type = 'text'; emoji.className = 'emoji-input m-emoji'; emoji.maxLength = 8;
+      emoji.placeholder = '🙂'; emoji.value = m.emoji || '';
+      line.appendChild(name); line.appendChild(emoji);
+      item.appendChild(line);
+
+      const swatches = document.createElement('div');
+      swatches.className = 'color-swatches';
+      buildSwatches(swatches, m.color || COLORS[0]);
+
+      const actions = document.createElement('div');
+      actions.className = 'item-actions';
+      const del = document.createElement('button');
+      del.className = 'btn btn-sm btn-danger'; del.textContent = 'Delete';
+      del.addEventListener('click', () => deleteMember(item, m));
+      actions.appendChild(del);
+
+      item.appendChild(swatches);
+      item.appendChild(actions);
+      return item;
+    }
+
+    async function saveMember(item) {
+      const body = {
+        display_name: item.querySelector('.m-name').value.trim(),
+        emoji: item.querySelector('.m-emoji').value.trim(),
+        color: selectedColor(item.querySelector('.color-swatches')),
+      };
+      if (!body.display_name) throw new Error('Name is required');
+      const id = item.dataset.id;
+      const res = id ? await api('PATCH', '/api/members/' + id, body)
+                     : await api('POST', '/api/members', body);
+      if (res.member && res.member.id) item.dataset.id = res.member.id;
+      return res;
+    }
+
+    async function saveAll() {
+      const btn = document.getElementById('save-all');
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+      const errors = [];
+
+      for (const item of document.querySelectorAll('#members-list .item')) {
+        try { await saveMember(item); }
+        catch (e) { errors.push((item.querySelector('.m-name')?.value || 'Member') + ': ' + e.message); }
+      }
+
+      for (const item of document.querySelectorAll('#categories-list .cat-item')) {
+        try {
+          const color = selectedColor(item.querySelector('.color-swatches'));
+          await api('PATCH', '/api/members/' + item.dataset.id, { color });
+          item.querySelector('.cat-dot').style.background = color;
+        } catch (e) {
+          errors.push((item.querySelector('.cat-item-name')?.textContent || 'Category') + ': ' + e.message);
+        }
+      }
+
+      for (const item of document.querySelectorAll('#feeds-list .item')) {
+        try { await saveFeedItem(item); }
+        catch (e) { errors.push('Feed: ' + e.message); }
+      }
+
+      try {
+        const holidays = Array.from(document.querySelectorAll('#holiday-grid input[type=checkbox]:checked'))
+          .map(cb => cb.value);
+        const body = {
+          name: document.getElementById('set-name').value.trim(),
+          zip: document.getElementById('set-zip').value.trim(),
+          weather_units: document.getElementById('set-units').value,
+          time_zone: document.getElementById('set-tz').value,
+          first_day_of_week: parseInt(document.getElementById('set-firstday').value, 10),
+          weeks_to_show: parseInt(document.getElementById('set-weeks').value, 10),
+          theme: selectedTheme,
+          is_public: document.getElementById('set-public').checked,
+          holidays,
+          share_keywords: shareKeywords,
+        };
+        const res = await api('PATCH', '/api/settings', body);
+        localStorage.setItem('theme', body.theme);
+        if (body.zip && !res.geocoded) errors.push('ZIP code could not be located');
+      } catch (e) {
+        errors.push('Settings: ' + e.message);
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Save';
+      toast(errors.length ? errors.join(' · ') : 'All saved', errors.length ? 'err' : 'ok');
+    }
+
+    async function deleteMember(item, m) {
+      if (!confirm('Delete ' + (m.display_name || 'this person') + '?')) return;
+      try {
+        if (item.dataset.id) await api('DELETE', '/api/members/' + item.dataset.id);
+        item.remove();
+        members = members.filter(x => x.id !== m.id);
+        toast('Deleted', 'ok');
+        await reloadFeedPeople();
+        buildImportPersonOptions();
+      } catch (e) { toast(e.message, 'err'); }
+    }
+
+    // ── Feeds ──
+    function peopleNames() {
+      const fromList = Array.from(document.querySelectorAll('#members-list .m-name'))
+        .map(i => i.value.trim()).filter(Boolean);
+      const fromCategories = members
+        .filter(m => m.member_type === 'category' && m.display_name)
+        .map(m => m.display_name);
+      const defaults = ['Family', 'Birthday', 'Anniversary', 'Holiday'];
+      return [...new Set([...fromList, ...fromCategories, ...defaults])];
+    }
+
+    function renderFeeds() {
+      const list = document.getElementById('feeds-list');
+      list.innerHTML = '';
+      feeds.forEach(f => list.appendChild(feedRow(f)));
+    }
+
+    function feedRow(f) {
+      const item = document.createElement('div');
+      item.className = 'item';
+      item.dataset.id = f.id || '';
+
+      const line = document.createElement('div');
+      line.className = 'item-line';
+      const url = document.createElement('input');
+      url.type = 'text'; url.className = 'f-url'; url.placeholder = 'iCal URL (https://…)';
+      url.value = f.url || '';
+      const emoji = document.createElement('input');
+      emoji.type = 'text'; emoji.className = 'emoji-input f-emoji'; emoji.maxLength = 8;
+      emoji.placeholder = '📅'; emoji.value = f.emoji || '';
+      line.appendChild(url); line.appendChild(emoji);
+
+      const line2 = document.createElement('div');
+      line2.className = 'item-line';
+      const sel = document.createElement('select');
+      sel.className = 'f-member';
+      sel.style.flex = '1';
+      buildPeopleOptions(sel, f.fixed_person || '');
+      line2.appendChild(sel);
+
+      const line3 = document.createElement('div');
+      line3.className = 'item-line';
+      const label = document.createElement('input');
+      label.type = 'text'; label.className = 'f-label'; label.maxLength = 60;
+      label.placeholder = 'Calendar name (optional)';
+      label.value = (f.display_name || f.name || '');
+      line3.appendChild(label);
+
+      const line4 = document.createElement('label');
+      line4.className = 'item-line';
+      line4.style.cssText = 'display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:var(--muted);';
+      const ns = document.createElement('input');
+      ns.type = 'checkbox'; ns.className = 'f-never-share';
+      ns.style.cssText = 'width:auto;flex:0 0 auto;';
+      ns.checked = !!f.never_share;
+      const nsText = document.createElement('span');
+      nsText.textContent = 'Never share this calendar (hide from view-only links, even if titles match share words)';
+      line4.appendChild(ns); line4.appendChild(nsText);
+
+      const actions = document.createElement('div');
+      actions.className = 'item-actions';
+      const del = document.createElement('button');
+      del.className = 'btn btn-sm btn-danger'; del.textContent = 'Delete';
+      del.addEventListener('click', () => deleteFeed(item, f));
+      actions.appendChild(del);
+
+      item.appendChild(line);
+      item.appendChild(line2);
+      item.appendChild(line3);
+      item.appendChild(line4);
+      item.appendChild(actions);
+      return item;
+    }
+
+    function buildPeopleOptions(sel, current) {
+      sel.innerHTML = '<option value="">— Whose calendar? —</option>';
+      peopleNames().forEach(n => {
+        const o = document.createElement('option');
+        o.value = n; o.textContent = n;
+        sel.appendChild(o);
+      });
+      if (current) sel.value = current;
+    }
+
+    function reloadFeedPeople() {
+      document.querySelectorAll('#feeds-list .f-member').forEach(sel =>
+        buildPeopleOptions(sel, sel.value));
+    }
+
+    function buildImportPersonOptions() {
+      const sel = document.getElementById('import-person');
+      if (!sel) return;
+      const current = sel.value;
+      sel.innerHTML = '<option value="">— Leave unmatched events unassigned —</option>';
+      peopleNames().forEach(n => {
+        const o = document.createElement('option');
+        o.value = n; o.textContent = n;
+        sel.appendChild(o);
+      });
+      if (current) sel.value = current;
+    }
+
+    async function saveFeedItem(item) {
+      const body = {
+        url: item.querySelector('.f-url').value.trim(),
+        label: item.querySelector('.f-label').value.trim(),
+        member: item.querySelector('.f-member').value,
+        emoji: item.querySelector('.f-emoji').value.trim(),
+        never_share: item.querySelector('.f-never-share').checked,
+      };
+      if (!/^https?:\/\//i.test(body.url)) throw new Error('valid URL required');
+      const id = item.dataset.id;
+      const res = id ? await api('PATCH', '/api/feeds/' + id, body)
+                     : await api('POST', '/api/feeds', body);
+      if (res.feed && res.feed.id) item.dataset.id = res.feed.id;
+      return res;
+    }
+
+    async function deleteFeed(item, f) {
+      if (!confirm('Delete this calendar feed?')) return;
+      try {
+        if (item.dataset.id) await api('DELETE', '/api/feeds/' + item.dataset.id);
+        item.remove();
+        feeds = feeds.filter(x => x.id !== f.id);
+        toast('Deleted', 'ok');
+      } catch (e) { toast(e.message, 'err'); }
+    }
+
+    // ── Import a calendar (one-time migration) ──
+    let lastImportPreview = null;
+
+    function todayStr() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    function importRangeDates() {
+      const preset = document.getElementById('import-range').value;
+      if (preset === 'future') return { rangeStart: todayStr(), rangeEnd: null };
+      if (preset === 'year')   return { rangeStart: `${new Date().getFullYear()}-01-01`, rangeEnd: null };
+      if (preset === 'all')    return { rangeStart: null, rangeEnd: null };
+      return {
+        rangeStart: document.getElementById('import-start').value || null,
+        rangeEnd:   document.getElementById('import-end').value || null,
+      };
+    }
+
+    function importRequestBody(dryRun) {
+      const url = document.getElementById('import-url').value.trim();
+      const person = document.getElementById('import-person').value;
+      const { rangeStart, rangeEnd } = importRangeDates();
+      return { url, person, rangeStart, rangeEnd, dryRun };
+    }
+
+    document.getElementById('import-range').addEventListener('change', e => {
+      document.getElementById('import-custom-range').style.display = e.target.value === 'custom' ? '' : 'none';
+    });
+
+    document.getElementById('import-preview-btn').addEventListener('click', async () => {
+      const url = document.getElementById('import-url').value.trim();
+      if (!/^https?:\/\//i.test(url)) { toast('Enter a valid iCal URL first', 'err'); return; }
+      const resultEl = document.getElementById('import-result');
+      const runBtn = document.getElementById('import-run-btn');
+      runBtn.style.display = 'none';
+      resultEl.style.display = '';
+      resultEl.textContent = 'Fetching and parsing…';
+      try {
+        const body = importRequestBody(true);
+        const res = await api('POST', '/api/feeds/import', body);
+        lastImportPreview = body;
+        const parts = [];
+        if (res.singleCount) parts.push(`${res.singleCount} one-off event${res.singleCount === 1 ? '' : 's'}`);
+        if (res.seriesCount) parts.push(`${res.seriesCount} recurring series`);
+        if (res.overrideCount) parts.push(`${res.overrideCount} edited instance${res.overrideCount === 1 ? '' : 's'}`);
+        if (!parts.length) {
+          resultEl.textContent = 'No matching events found in this range.';
+        } else {
+          const sampleTxt = res.sample && res.sample.length ? ` Examples: ${res.sample.slice(0,4).join(', ')}${res.sample.length > 4 ? '…' : ''}.` : '';
+          resultEl.textContent = `Found ${parts.join(' and ')}.${sampleTxt} Nothing has been imported yet — review, then click Import.`;
+          runBtn.style.display = '';
+        }
+      } catch (e) {
+        resultEl.textContent = '';
+        resultEl.style.display = 'none';
+        toast(e.message, 'err');
+      }
+    });
+
+    document.getElementById('import-run-btn').addEventListener('click', async () => {
+      const resultEl = document.getElementById('import-result');
+      const runBtn = document.getElementById('import-run-btn');
+      const currentBody = importRequestBody(false);
+      if (!lastImportPreview || JSON.stringify({ ...lastImportPreview, dryRun: false }) !== JSON.stringify(currentBody)) {
+        toast('Settings changed — click Preview again first', 'err');
+        return;
+      }
+      if (!confirm('Import these events into your calendar now? This writes real events and cannot be undone automatically.')) return;
+      runBtn.disabled = true;
+      resultEl.textContent = 'Importing…';
+      try {
+        const res = await api('POST', '/api/feeds/import', currentBody);
+        const parts = [];
+        if (res.insertedSingles) parts.push(`${res.insertedSingles} event${res.insertedSingles === 1 ? '' : 's'}`);
+        if (res.insertedSeries) parts.push(`${res.insertedSeries} recurring series`);
+        if (res.insertedOverrides) parts.push(`${res.insertedOverrides} edited instance${res.insertedOverrides === 1 ? '' : 's'}`);
+        resultEl.textContent = `Imported ${parts.join(' and ') || 'nothing new'}.` +
+          (res.removedFeed ? ' The matching live feed subscription was removed — these events are now yours to edit.' : '');
+        runBtn.style.display = 'none';
+        lastImportPreview = null;
+        if (res.removedFeed) {
+          feeds = feeds.filter(f => f.url !== currentBody.url);
+          renderFeeds();
+        }
+        toast('Import complete', 'ok');
+      } catch (e) {
+        toast(e.message, 'err');
+      } finally {
+        runBtn.disabled = false;
+      }
+    });
+
+    // ── Holidays ──
+    function buildHolidayGrid(selected = []) {
+      const selectedSet = new Set(selected);
+      const grid = document.getElementById('holiday-grid');
+      grid.innerHTML = '';
+      HOLIDAY_DEFS.forEach(h => {
+        const label = document.createElement('label');
+        label.className = 'holiday-check';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = h.key;
+        cb.checked = selectedSet.has(h.key);
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(' ' + h.emoji + ' ' + h.name));
+        grid.appendChild(label);
+      });
+    }
+
+    // ── Calendar settings ──
+    function buildThemeGrid() {
+      const grid = document.getElementById('theme-grid');
+      grid.innerHTML = '';
+      THEMES.forEach(t => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'theme-opt' + (t.id === selectedTheme ? ' selected' : '');
+        b.dataset.theme = t.id;
+        b.innerHTML = '<div class="theme-chip" style="background:' + t.chip + '"></div>' +
+                      '<div class="theme-name">' + t.name + '</div>';
+        b.addEventListener('click', () => {
+          selectedTheme = t.id;
+          grid.querySelectorAll('.theme-opt').forEach(x => x.classList.remove('selected'));
+          b.classList.add('selected');
+        });
+        grid.appendChild(b);
+      });
+    }
+
+    function buildTzSelect(current) {
+      const sel = document.getElementById('set-tz');
+      const list = TZS.slice();
+      if (current && !list.some(([z]) => z === current)) list.unshift([current, current]);
+      sel.innerHTML = '';
+      list.forEach(([z, label]) => {
+        const o = document.createElement('option');
+        o.value = z; o.textContent = label;
+        sel.appendChild(o);
+      });
+      sel.value = current || 'America/New_York';
+    }
+
+    // ── Notifications (Web Push) ──
+    // Progressive enhancement: everything here stays hidden unless the browser
+    // actually supports Web Push in a secure context. A self-hoster on
+    // http://192.168.x.x sees an explanation and the webhook hint instead of a
+    // toggle that could never work.
+    let pushSubs = [];          // every registered device (for the list)
+    let myEndpoint = null;      // this browser's endpoint, if subscribed
+    let pushWatch = [];         // this device's watched people (local edit buffer)
+
+    function urlBase64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const raw = atob(base64);
+      return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+    }
+
+    function renderPushPeople() {
+      const wrap = document.getElementById('push-people');
+      wrap.innerHTML = '';
+      const names = members.filter(m => m.display_name).map(m => m.display_name);
+      if (!names.length) {
+        wrap.innerHTML = '<span class="hint">Add people under Family first.</span>';
+        return;
+      }
+      names.forEach(n => {
+        const on = pushWatch.some(w => w.toLowerCase() === n.toLowerCase());
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = n;
+        b.style.cssText = 'border-radius:999px;padding:5px 12px;font-size:0.85rem;cursor:pointer;border:1px solid ' +
+          (on ? 'var(--accent)' : 'var(--border)') + ';background:' + (on ? 'var(--accent)' : 'none') +
+          ';color:' + (on ? '#fff' : 'var(--muted)') + ';';
+        b.addEventListener('click', () => {
+          pushWatch = on ? pushWatch.filter(w => w.toLowerCase() !== n.toLowerCase()) : [...pushWatch, n];
+          renderPushPeople();
+          savePushPrefs();
+        });
+        wrap.appendChild(b);
+      });
+    }
+
+    function renderPushDevices() {
+      const wrap = document.getElementById('push-devices');
+      wrap.innerHTML = '';
+      if (!pushSubs.length) {
+        wrap.innerHTML = '<p class="hint" style="margin-top:0;">No devices registered yet.</p>';
+        return;
+      }
+      pushSubs.forEach(s => {
+        const row = document.createElement('div');
+        row.className = 'cat-item';
+        const name = document.createElement('div');
+        name.className = 'cat-item-name';
+        const isThis = s.device_id && s.device_id === kbDeviceId();
+        const watching = (s.notify_people && s.notify_people.length) ? s.notify_people.join(', ') : 'everything';
+        name.innerHTML = `${esc(s.label || 'Device')}${isThis ? ' <span style="color:var(--accent);font-size:0.78rem;">· this device</span>' : ''}` +
+          `<div class="hint" style="margin-top:2px;">Watching ${esc(watching)}</div>`;
+        const del = document.createElement('button');
+        del.className = 'btn btn-sm btn-danger';
+        del.textContent = 'Remove';
+        del.addEventListener('click', async () => {
+          if (!confirm('Stop sending notifications to ' + (s.label || 'this device') + '?')) return;
+          try {
+            await api('DELETE', '/api/push/subscriptions/' + s.id);
+            toast('Device removed', 'ok');
+            await loadPushState();
+          } catch (e) { toast(e.message, 'err'); }
+        });
+        row.appendChild(name);
+        row.appendChild(del);
+        wrap.appendChild(row);
+      });
+    }
+
+    function esc(s) {
+      const d = document.createElement('div');
+      d.textContent = s == null ? '' : s;
+      return d.innerHTML;
+    }
+
+    // Reflect whether THIS browser is currently subscribed. "Subscribed" means
+    // both halves agree: the browser still holds a PushSubscription, AND the
+    // server still has a row for this device. If either is missing (permission
+    // revoked, data cleared, row pruned as expired) we fall back to the off
+    // state so the user can simply re-enable.
+    async function refreshMyState() {
+      myEndpoint = null;
+      if (!kbPushSupported()) return;
+      try {
+        const reg = await kbServiceWorker();
+        const sub = await reg.pushManager.getSubscription();
+        myEndpoint = sub ? sub.endpoint : null;
+      } catch (_) { myEndpoint = null; }
+
+      // Matched by device_id — the list endpoint deliberately doesn't return
+      // endpoints (long, and effectively a capability URL).
+      const mine = myRow();
+      const on = !!myEndpoint && !!mine;
+
+      document.getElementById('push-on').style.display = on ? '' : 'none';
+      document.getElementById('push-off').style.display = on ? 'none' : '';
+
+      if (on && mine) {
+        document.getElementById('push-label').value = mine.label || '';
+        document.getElementById('push-lead').value = String(mine.reminder_minutes ?? 60);
+        document.getElementById('push-digest').checked = !!mine.digest_enabled;
+        document.getElementById('push-reminders').checked = !!mine.reminders_enabled;
+        document.getElementById('push-onadd').checked = !!mine.on_add_enabled;
+        pushWatch = Array.isArray(mine.notify_people) ? mine.notify_people.slice() : [];
+        renderPushPeople();
+      }
+    }
+
+    async function loadPushState() {
+      if (!kbPushSupported()) return;
+      try {
+        const res = await api('GET', '/api/push/subscriptions');
+        pushSubs = res.subscriptions || [];
+      } catch { pushSubs = []; }
+      renderPushDevices();
+      await refreshMyState();
+    }
+
+    // The subscription list endpoint omits `endpoint` (it's long and secret-ish),
+    // so `mine` is matched by device_id. Fetch it once here for the test button.
+    function myRow() {
+      return pushSubs.find(s => s.device_id && s.device_id === kbDeviceId()) || null;
+    }
+
+    async function savePushPrefs() {
+      const mine = myRow();
+      if (!mine) return;
+      try {
+        await api('PATCH', '/api/push/subscriptions/' + mine.id, {
+          label: document.getElementById('push-label').value.trim() || 'This device',
+          notifyPeople: pushWatch,
+          reminderMinutes: +document.getElementById('push-lead').value,
+          digestEnabled: document.getElementById('push-digest').checked,
+          remindersEnabled: document.getElementById('push-reminders').checked,
+          onAddEnabled: document.getElementById('push-onadd').checked,
+        });
+        await loadPushState();
+      } catch (e) { toast(e.message, 'err'); }
+    }
+
+    async function enablePush() {
+      const btn = document.getElementById('push-enable-btn');
+      btn.disabled = true;
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          const msg = document.getElementById('push-denied-msg');
+          msg.style.display = '';
+          msg.textContent = permission === 'denied'
+            ? "Your browser is blocking notifications for this site. You'll need to re-allow them in the browser's site settings."
+            : 'Notification permission was dismissed.';
+          return;
+        }
+
+        const reg = await kbServiceWorker();
+        const { publicKey } = await api('GET', '/api/push/key');
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        });
+
+        await api('POST', '/api/push/subscribe', {
+          subscription: sub.toJSON(),
+          deviceId: kbDeviceId(),
+          label: document.getElementById('push-label').value.trim() ||
+                 (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? 'My phone' : 'My computer'),
+          notifyPeople: pushWatch,
+          reminderMinutes: +document.getElementById('push-lead').value,
+        });
+
+        toast('Notifications on for this device', 'ok');
+        await loadPushState();
+      } catch (e) {
+        toast('Could not enable notifications: ' + (e.message || e), 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function disablePush() {
+      try {
+        const reg = await kbServiceWorker();
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) await sub.unsubscribe();
+        const mine = myRow();
+        if (mine) await api('DELETE', '/api/push/subscriptions/' + mine.id);
+        toast('Notifications off for this device', 'ok');
+        await loadPushState();
+      } catch (e) { toast(e.message, 'err'); }
+    }
+
+    function initPushUi() {
+      const supported = kbPushSupported();
+      document.getElementById('push-supported').classList.toggle('hidden', !supported);
+      document.getElementById('push-unsupported').classList.toggle('hidden', supported);
+
+      if (!supported) {
+        // Be specific about WHY — "requires HTTPS" is actionable, "unsupported"
+        // is not, and this is the single most likely support question.
+        document.getElementById('push-unsupported-msg').textContent = !window.isSecureContext
+          ? 'Push notifications need a secure connection (HTTPS). This page is loaded over plain HTTP, so your browser blocks them. Put Kinboard behind a reverse proxy with HTTPS to enable them — or use the WEBHOOK_URL setting (ntfy, Discord, Slack, Home Assistant) which works over plain HTTP. See the README.'
+          : "This browser doesn't support push notifications. On iPhone or iPad, add Kinboard to your home screen first, then re-open it from there.";
+        return;
+      }
+
+      document.getElementById('push-enable-btn').addEventListener('click', enablePush);
+      document.getElementById('push-disable-btn').addEventListener('click', disablePush);
+      document.getElementById('push-label').addEventListener('change', savePushPrefs);
+      document.getElementById('push-lead').addEventListener('change', savePushPrefs);
+      ['push-digest', 'push-reminders', 'push-onadd'].forEach(id =>
+        document.getElementById(id).addEventListener('change', savePushPrefs));
+
+      document.getElementById('push-test-btn').addEventListener('click', async () => {
+        const btn = document.getElementById('push-test-btn');
+        btn.disabled = true;
+        try {
+          const reg = await kbServiceWorker();
+          const sub = await reg.pushManager.getSubscription();
+          const res = await api('POST', '/api/push/test', sub ? { endpoint: sub.endpoint } : {});
+          toast(res.sent ? 'Test notification sent' : 'Nothing was sent — no active device', res.sent ? 'ok' : 'err');
+        } catch (e) {
+          toast(e.message, 'err');
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    }
+
+    // ── Account: change household password ──
+    document.getElementById('pw-save').addEventListener('click', async () => {
+      const currentPassword = document.getElementById('pw-current').value;
+      const newPassword = document.getElementById('pw-new').value;
+      if (!newPassword || newPassword.length < 6) { toast('New password must be at least 6 characters', 'err'); return; }
+      const btn = document.getElementById('pw-save');
+      btn.disabled = true;
+      try {
+        await api('POST', '/api/account/password', { currentPassword, newPassword });
+        document.getElementById('pw-current').value = '';
+        document.getElementById('pw-new').value = '';
+        toast('Password changed', 'ok');
+      } catch (e) {
+        toast(e.message, 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById('add-member').addEventListener('click', () => {
+      const item = memberRow({ color: COLORS[members.length % COLORS.length] });
+      document.getElementById('members-list').appendChild(item);
+      item.querySelector('.m-name').focus();
+    });
+    document.getElementById('add-feed').addEventListener('click', () => {
+      const item = feedRow({});
+      document.getElementById('feeds-list').appendChild(item);
+      item.querySelector('.f-url').focus();
+    });
+    document.getElementById('save-all').addEventListener('click', saveAll);
+
+    // ── Load ──
+    async function loadAll() {
+      // Make sure the category rows exist + are tagged as categories before we
+      // read members, so Family/Birthday/Anniversary/Holiday always show up.
+      try { await api('POST', '/api/categories/ensure'); } catch (e) { /* non-fatal */ }
+
+      const [config, mres, fres] = await Promise.all([
+        api('GET', '/api/config'),
+        api('GET', '/api/members'),
+        api('GET', '/api/feeds'),
+      ]);
+
+      document.getElementById('page-title').textContent = (config.name || 'Calendar') + ' — settings';
+      document.title = (config.name || 'Calendar') + ' settings — Kinboard';
+
+      if (config.donateUrl) {
+        document.getElementById('donate-card').style.display = '';
+        document.getElementById('donate-link').href = config.donateUrl;
+      }
+
+      members = mres.members || [];
+      feeds = fres.feeds || [];
+      renderMembers();
+      renderCategories();
+      renderFeeds();
+      buildImportPersonOptions();
+      buildHolidayGrid(config.holidays || []);
+      loadShareState();
+      shareKeywords = Array.isArray(config.shareKeywords) ? config.shareKeywords.slice() : [];
+      renderKeywords();
+
+      document.getElementById('set-name').value = config.name || '';
+      document.getElementById('set-zip').value = config.zip || '';
+      document.getElementById('set-units').value =
+        (config.weather && config.weather.units) || 'fahrenheit';
+      buildTzSelect(config.timeZone || 'America/New_York');
+      document.getElementById('set-firstday').value = String(config.firstDayOfWeek ?? 0);
+      document.getElementById('set-weeks').value = String(config.weeksToShow ?? 4);
+      document.getElementById('set-public').checked = !!config.isPublic;
+      // Reflect the theme actually in effect (the 🎨 button on the calendar sets
+      // localStorage only) so saving a settings change doesn't clobber a
+      // locally-chosen theme back to the account default.
+      selectedTheme = localStorage.getItem('theme') || config.theme || 'dark';
+      buildThemeGrid();
+
+      // Notifications last — needs `members` (for the who-to-notify chips),
+      // which is populated above.
+      renderPushPeople();
+      await loadPushState();
+
+      show('main');
+    }
+
+    async function init() {
+      // Wire the push UI before loading: initPushUi() decides whether the card
+      // is even shown, and that shouldn't depend on the API call succeeding.
+      initPushUi();
+      try {
+        await loadAll();
+      } catch (e) {
+        document.getElementById('state-loading').textContent = e.message;
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

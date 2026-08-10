@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Set up Kinboard</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f0f10; --surface: #1a1a1d; --surface-2: #232327; --border: #2a2a2d;
+      --text: #e8e8ea; --muted: #888; --accent: #6366f1; --accent-hover: #818cf8; --error: #f87171;
+    }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1.5rem;
+    }
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      padding: 2rem; width: 100%; max-width: 400px;
+    }
+    .logo { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .logo span { color: var(--accent); }
+    p.sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+    .field { margin-bottom: 1.1rem; }
+    label {
+      display: block; font-size: 0.78rem; font-weight: 500; color: var(--muted);
+      margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    input[type="text"], input[type="password"], select {
+      width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+      padding: 0.7rem 0.9rem; color: var(--text); font-size: 1rem; outline: none;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+    .hint { font-size: 0.78rem; color: var(--muted); margin-top: 0.35rem; }
+    button {
+      width: 100%; padding: 0.75rem; background: var(--accent); color: #fff; border: none;
+      border-radius: 8px; font-size: 1rem; font-weight: 700; cursor: pointer; margin-top: 0.5rem;
+    }
+    button:hover { background: var(--accent-hover); }
+    button:disabled { opacity: 0.5; cursor: default; }
+    #error { color: var(--error); font-size: 0.88rem; margin-top: 0.9rem; display: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">Kin<span>board</span></div>
+    <p class="sub">One-time setup. This creates your calendar and the household password everyone in your family will use to sign in.</p>
+    <form id="setup-form">
+      <div class="field">
+        <label for="s-name">Family / calendar name</label>
+        <input id="s-name" type="text" maxlength="60" placeholder="The Smiths" required />
+      </div>
+      <div class="field">
+        <label for="s-tz">Time zone</label>
+        <select id="s-tz"></select>
+      </div>
+      <div class="field">
+        <label for="s-password">Household password</label>
+        <input id="s-password" type="password" autocomplete="new-password" minlength="6" required />
+        <div class="hint">At least 6 characters. Everyone in the family uses this same password — there are no separate logins.</div>
+      </div>
+      <div class="field">
+        <label for="s-password2">Confirm password</label>
+        <input id="s-password2" type="password" autocomplete="new-password" minlength="6" required />
+      </div>
+      <button id="submit-btn" type="submit">Create calendar</button>
+      <div id="error"></div>
+    </form>
+  </div>
+
+  <script>
+    const TZS = [
+      ['America/New_York','Eastern (New York)'], ['America/Chicago','Central (Chicago)'],
+      ['America/Denver','Mountain (Denver)'], ['America/Phoenix','Arizona (Phoenix)'],
+      ['America/Los_Angeles','Pacific (Los Angeles)'], ['America/Anchorage','Alaska (Anchorage)'],
+      ['Pacific/Honolulu','Hawaii (Honolulu)'], ['America/Toronto','Toronto'],
+      ['America/Vancouver','Vancouver'], ['Europe/London','London'],
+      ['Europe/Paris','Central Europe (Paris)'], ['Australia/Sydney','Sydney'],
+    ];
+    const tzSel = document.getElementById('s-tz');
+    const guessed = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const list = TZS.slice();
+    if (guessed && !list.some(([z]) => z === guessed)) list.unshift([guessed, guessed + ' (detected)']);
+    list.forEach(([z, label]) => {
+      const o = document.createElement('option');
+      o.value = z; o.textContent = label;
+      tzSel.appendChild(o);
+    });
+    tzSel.value = guessed && list.some(([z]) => z === guessed) ? guessed : 'America/New_York';
+
+    document.getElementById('setup-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const errEl = document.getElementById('error');
+      const btn = document.getElementById('submit-btn');
+      errEl.style.display = 'none';
+
+      const name = document.getElementById('s-name').value.trim();
+      const timeZone = document.getElementById('s-tz').value;
+      const password = document.getElementById('s-password').value;
+      const password2 = document.getElementById('s-password2').value;
+
+      if (password !== password2) {
+        errEl.textContent = 'Passwords do not match.';
+        errEl.style.display = 'block';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Creating…';
+      try {
+        const res = await fetch('/api/setup', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin', body: JSON.stringify({ name, timeZone, password }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || 'Could not complete setup.');
+        }
+        location.href = '/';
+      } catch (err) {
+        errEl.textContent = err.message || 'Could not complete setup.';
+        errEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Create calendar';
+      }
+    });
+  </script>
+</body>
+</html>

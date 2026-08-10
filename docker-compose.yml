@@ -1,0 +1,13 @@
+name: kinboard
+
+services:
+  kinboard:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "3200:3000"
+    volumes:
+      # Everything that matters — the SQLite DB, its WAL files, nightly
+      # backups — lives here. Back up this folder; that's the whole database.
+      - ./data:/app/data

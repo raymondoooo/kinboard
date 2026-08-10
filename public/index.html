@@ -1,0 +1,3734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kinboard</title>
+<meta name="theme-color" content="#000000" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Kinboard" />
+<link rel="icon" href="/icon.svg" type="image/svg+xml" />
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png" />
+<link rel="manifest" href="/manifest.json" />
+<style>
+  :root {
+    --bg: #0d0b1a;
+    --surface: rgba(255,255,255,0.07);
+    --surface-2: rgba(255,255,255,0.14);
+    --text: #f3f2fb;
+    --muted: rgba(243,242,251,0.62);
+    --faint: rgba(243,242,251,0.38);
+    --grid-line: rgba(255,255,255,0.07);
+    --hairline: rgba(255,255,255,0.16);
+    --accent: #3dd6e0;
+    --header-font: 1.8rem;
+    --event-font: 1rem;
+    --daynum-font: 1.1rem;
+    --radius: 14px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    background:
+      radial-gradient(1100px 760px at 12% -5%, rgba(61,214,224,0.24), transparent 60%),
+      radial-gradient(1000px 700px at 105% 105%, rgba(76,141,255,0.20), transparent 55%),
+      linear-gradient(160deg, #0b2138 0%, #0a2430 45%, #062730 100%);
+    background-attachment: fixed;
+  }
+
+  #header {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 20px;
+    font-size: var(--header-font);
+    border-bottom: 1px solid var(--hairline);
+    background: rgba(255,255,255,0.04);
+    backdrop-filter: blur(16px);
+  }
+
+  #month-label {
+    font-weight: 800;
+    font-size: 1.25em;
+    letter-spacing: -0.03em;
+  }
+
+  .nav-btn {
+    background: none;
+    border: none;
+    color: var(--text);
+    font-size: 1.3em;
+    line-height: 1;
+    width: 1.5em;
+    height: 1.5em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    padding: 0;
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.15s, background 0.15s;
+  }
+
+  .nav-btn:hover { opacity: 1; background: var(--surface-2); }
+
+  #header-right {
+    position: absolute;
+    right: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  #header .clock {
+    font-weight: 500;
+    font-size: 0.52em;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  #theme-btn {
+    background: none;
+    border: none;
+    color: var(--text);
+    font-size: 1.05rem;
+    cursor: pointer;
+    width: 1.9em;
+    height: 1.9em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    padding: 0;
+    opacity: 0.55;
+    line-height: 1;
+    transition: opacity 0.15s, background 0.15s;
+  }
+
+  #theme-btn:hover { opacity: 1; background: var(--surface-2); }
+
+  #settings-link {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 1.9em;
+    height: 1.9em;
+    border-radius: 50%;
+    color: var(--text);
+    text-decoration: none;
+    font-size: 1.05rem;
+    opacity: 0.85;
+    transition: opacity 0.15s, background 0.15s;
+  }
+  #settings-link:hover { opacity: 1; background: var(--surface-2); }
+
+  #view-btn {
+    position: absolute;
+    left: 16px;
+    background: var(--surface-2);
+    border: none;
+    color: var(--text);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 6px 11px;
+    border-radius: 999px;
+    cursor: pointer;
+    opacity: 0.85;
+    transition: opacity 0.15s, background 0.15s;
+  }
+
+  #view-btn:hover { opacity: 1; background: #2c2c38; }
+
+  #today-btn {
+    position: absolute;
+    left: 62px;
+    background: var(--surface-2);
+    border: none;
+    color: var(--accent);
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    opacity: 0.95;
+    display: none;
+    transition: background 0.15s;
+  }
+
+  #today-btn:hover { background: #2c2c38; }
+
+  #filter-bar {
+    display: flex;
+    gap: 7px;
+    padding: 8px 14px;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--hairline);
+    scrollbar-width: none;
+    flex-shrink: 0;
+  }
+  #filter-bar::-webkit-scrollbar { display: none; }
+
+  .filter-chip {
+    flex-shrink: 0;
+    background: none;
+    border: 1.5px solid var(--chip-color);
+    color: var(--text);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    padding: 4px 13px;
+    border-radius: 999px;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.15s, background 0.15s, color 0.15s;
+  }
+  .filter-chip:hover { opacity: 0.85; }
+  .filter-chip.active { background: var(--chip-color); color: #000; opacity: 1; border-color: var(--chip-color); }
+
+  /* ==== PERSON ASSIGNMENT: multi-select chips (forms) + badge rows (read-only) ==== */
+  .person-chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .person-chip {
+    flex-shrink: 0;
+    background: none;
+    border: 1.5px solid var(--chip-color);
+    color: var(--text);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    padding: 7px 15px;
+    border-radius: 999px;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.15s, background 0.15s, color 0.15s;
+  }
+  .person-chip:hover { opacity: 0.85; }
+  .person-chip.active { background: var(--chip-color); color: #000; opacity: 1; border-color: var(--chip-color); }
+
+  /* A row of small identifiable badges (color + emoji/initial) standing in for
+     the old single color dot/tint — deliberately NOT tiny: the point is to
+     make who's attached obvious at a glance, not to save space. */
+  .person-badge-row { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
+  .person-badge {
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 800;
+    line-height: 1;
+    flex-shrink: 0;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.35);
+  }
+  .person-badge-more {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--muted);
+    flex-shrink: 0;
+    padding: 0 1px;
+  }
+
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-auto-rows: minmax(min-content, 1fr);
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .day-header {
+    text-align: center;
+    padding: 8px 0;
+    font-weight: 600;
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-bottom: 1px solid var(--hairline);
+    border-right: 1px solid var(--grid-line);
+    background: transparent;
+  }
+
+  .day-header:last-child { border-right: none; }
+
+  .day-cell {
+    border-right: 1px solid var(--grid-line);
+    border-bottom: 1px solid var(--grid-line);
+    padding: 5px 6px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    transition: background 0.15s;
+  }
+
+  .day-cell:nth-child(7n) { border-right: none; }
+
+  .day-cell.today {
+    background: rgba(76,141,255,0.06);
+  }
+
+  /* Today: filled accent disc behind the date number, app-calendar style. The number
+     is the last span in .day-number (the weather span comes first). */
+  .day-cell.today .day-number > span:last-child {
+    background: var(--accent);
+    color: #053038;
+    font-weight: 800;
+    min-width: 1.6em;
+    height: 1.6em;
+    padding: 0 0.34em;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 18px rgba(61,214,224,0.85);
+  }
+
+  .day-cell.other-month { opacity: 0.4; }
+
+  .day-number {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: var(--daynum-font);
+    font-weight: 600;
+    margin-bottom: 3px;
+  }
+
+  .day-weather {
+    font-size: calc(var(--daynum-font) * 0.92);
+    font-weight: 600;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .events {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .event {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: var(--event-font);
+    line-height: 1.32;
+    padding: 3px 9px;
+    border-radius: 7px;
+    color: var(--text);
+    background: var(--surface-2);
+    font-weight: 700;
+    cursor: pointer;
+    transition: filter 0.12s, background 0.15s;
+  }
+
+  .event:hover { filter: brightness(1.12); }
+
+  .event .event-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .event .time {
+    font-weight: 500;
+    opacity: 0.7;
+    margin-right: 5px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .event .location {
+    font-weight: 400;
+    opacity: 0.7;
+    font-size: 0.9em;
+  }
+
+  /* All-day: a distinct, slightly lighter tint than timed events — no longer
+     colored by person (that's what the badge row is for). */
+  .event.allday {
+    background: var(--surface);
+    border: none;
+    border-left: 3px solid var(--hairline);
+    border-radius: 4px;
+    font-weight: 700;
+  }
+
+  /* ---- Event detail popup ---- */
+  #detail-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.72);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overflow-y: auto;
+  }
+
+  #detail-overlay.open { display: flex; }
+
+  #detail-modal {
+    background: rgba(255,255,255,0.09);
+    border: 1px solid var(--hairline);
+    border-radius: 18px;
+    backdrop-filter: blur(28px);
+    box-shadow: 0 18px 50px rgba(0,0,0,0.5);
+    padding: 20px 24px 24px;
+    width: 90%;
+    max-width: 340px;
+    color: #fff;
+    position: relative;
+    max-height: 92vh;
+    max-height: 92dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #detail-close {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 1.4rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+  }
+
+  #detail-close:hover { color: #fff; }
+
+  #detail-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+    padding-right: 24px;
+  }
+
+  #detail-meta {
+    font-size: 0.85rem;
+    opacity: 0.65;
+    margin-bottom: 14px;
+  }
+
+  #detail-person-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+  }
+
+  #detail-location {
+    font-size: 0.85rem;
+    opacity: 0.65;
+    margin-top: 10px;
+  }
+
+
+  #detail-delete {
+    display: none;
+    width: 100%;
+    margin-top: 20px;
+    padding: 11px;
+    background: #5a1a1a;
+    color: #ff8888;
+    border: 1px solid #7a2a2a;
+    border-radius: 5px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 44px;
+  }
+
+  #detail-delete:hover { background: #7a2020; color: #ffaaaa; }
+  #detail-delete:disabled { opacity: 0.45; cursor: default; }
+
+  #detail-edit {
+    display: none;
+    width: 100%;
+    margin-top: 18px;
+    padding: 11px;
+    background: rgba(61,214,224,0.15);
+    color: var(--accent);
+    border: 1px solid rgba(61,214,224,0.4);
+    border-radius: 5px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 44px;
+  }
+  #detail-edit:hover { background: rgba(61,214,224,0.28); }
+
+  #detail-delete-recurring {
+    gap: 8px;
+    margin-top: 20px;
+  }
+
+  #detail-delete-one,
+  #detail-delete-all {
+    flex: 1;
+    padding: 10px 8px;
+    border-radius: 5px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 44px;
+  }
+
+  #detail-delete-one { background: #3d2800; color: #ffbb55; border: 1px solid #5a3a00; }
+  #detail-delete-one:hover { background: #5a3d00; }
+  #detail-delete-all { background: #5a1a1a; color: #ff8888; border: 1px solid #7a2a2a; }
+  #detail-delete-all:hover { background: #7a2020; }
+  #detail-delete-one:disabled, #detail-delete-all:disabled { opacity: 0.45; cursor: default; }
+
+  /* ---- Add event ---- */
+  #add-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #053038;
+    border: none;
+    font-size: 2rem;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    z-index: 100;
+    box-shadow: 0 6px 18px rgba(61,214,224,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.1s, box-shadow 0.15s;
+  }
+
+  #add-btn:hover { background: #5ce4ee; transform: translateY(-1px); box-shadow: 0 8px 22px rgba(61,214,224,0.5); }
+
+  #feed-btn {
+    position: fixed;
+    bottom: 24px;
+    left: 24px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #333;
+    color: #aaa;
+    border: none;
+    font-size: 1.3rem;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #feed-btn:hover { background: #555; color: #fff; }
+
+  #add-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.78);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overflow-y: auto;
+  }
+
+  #add-overlay.open { display: flex; }
+
+  #add-modal {
+    background: rgba(255,255,255,0.09);
+    border: 1px solid var(--hairline);
+    border-radius: 18px;
+    backdrop-filter: blur(28px);
+    box-shadow: 0 18px 50px rgba(0,0,0,0.5);
+    padding: 24px;
+    width: 90%;
+    max-width: 380px;
+    color: #fff;
+    /* Cap to the viewport and scroll INSIDE the modal so the Save buttons are
+       always reachable, even on a zoomed-in phone where the form is taller than
+       the screen. dvh accounts for mobile browser toolbars; vh is the fallback. */
+    max-height: 92vh;
+    max-height: 92dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #add-modal h2 { margin: 0 0 16px; font-size: 1.2rem; font-weight: 700; }
+
+  #add-form label {
+    display: block;
+    font-size: 0.78rem;
+    opacity: 0.6;
+    margin: 14px 0 4px;
+  }
+
+  #add-form input[type=text],
+  #add-form input[type=date],
+  #add-form input[type=time],
+  #add-form select {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 1rem;
+    padding: 10px 12px;
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+
+  #add-form input:focus, #add-form select:focus,
+  #feed-form input:focus, #feed-form select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .ae-hint {
+    margin: 8px 2px 0;
+    font-size: 0.76rem;
+    line-height: 1.45;
+    color: var(--muted);
+  }
+
+  .ae-check-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .ae-check-row label { margin: 0; opacity: 1; font-size: 0.95rem; cursor: pointer; }
+
+  .ae-check-row input[type=checkbox] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #888;
+  }
+
+  /* Grid with minmax(0,1fr) forces two equal columns that can shrink below the
+     native time input's large intrinsic width — otherwise iOS Safari keeps the
+     inputs at full width and the Start/End boxes overflow into each other. */
+  .ae-time-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px; }
+  .ae-time-row > div { min-width: 0; }
+  /* iOS keeps the NATIVE time control (fixed width, ignores the box) unless
+     appearance is stripped — that native control is what rendered the two
+     Start/End fields as one merged box with a pill in the middle. With
+     appearance:none they become plain boxes that fill their grid column, and
+     still open the time wheel on tap. */
+  #add-form input[type=time] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+    text-align: left;
+  }
+  /* Same iOS fix for the date field — the native control has a fixed intrinsic
+     width and overflows the box on a narrow/zoomed screen. appearance:none makes
+     it honor width:100%; keep the value centered like before. */
+  #add-form input[type=date] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+    text-align: center;
+  }
+
+  .ae-custom-every-row { display: flex; gap: 10px; align-items: center; }
+  .ae-custom-every-row #ae-custom-interval { width: 88px; flex: 0 0 88px; }
+  .ae-weekday-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .ae-weekday-chip {
+    width: 40px;
+    min-height: 40px;
+    border-radius: 8px;
+    border: 1px solid var(--hairline);
+    background: var(--surface-2);
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+  }
+  .ae-weekday-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+
+  .ae-btns { display: flex; gap: 12px; margin-top: 22px; }
+
+  .ae-btns button {
+    flex: 1;
+    padding: 12px;
+    border-radius: 5px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    min-height: 44px;
+  }
+
+  #ae-cancel, #cf-cancel, #ml-cancel, #ml-delete, #td-cancel, #td-delete { background: var(--surface-2); color: var(--muted); }
+  #ae-cancel:hover, #cf-cancel:hover, #ml-cancel:hover, #ml-delete:hover, #td-cancel:hover, #td-delete:hover { background: #2c2c38; color: #fff; }
+  #ae-submit, #cf-submit, #ae-save-one, #ae-save-all, #ml-submit, #td-submit { background: var(--accent); color: #053038; font-weight: 700; }
+  #ae-submit:hover, #cf-submit:hover, #ae-save-one:hover, #ae-save-all:hover, #ml-submit:hover, #td-submit:hover { background: #5ce4ee; }
+  #ae-submit:disabled, #cf-submit:disabled, #ae-save-one:disabled, #ae-save-all:disabled, #ml-submit:disabled, #td-submit:disabled { opacity: 0.45; cursor: default; }
+
+  #feed-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.78);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overflow-y: auto;
+  }
+
+  #feed-overlay.open { display: flex; }
+
+  #feed-modal {
+    background: rgba(255,255,255,0.09);
+    border: 1px solid var(--hairline);
+    border-radius: 18px;
+    backdrop-filter: blur(28px);
+    box-shadow: 0 18px 50px rgba(0,0,0,0.5);
+    padding: 24px;
+    width: 90%;
+    max-width: 420px;
+    color: #fff;
+    max-height: 92vh;
+    max-height: 92dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #feed-modal h2 { margin: 0 0 16px; font-size: 1.2rem; font-weight: 700; }
+
+  #feed-form label {
+    display: block;
+    font-size: 0.78rem;
+    opacity: 0.6;
+    margin: 14px 0 4px;
+  }
+
+  #feed-form input[type=text],
+  #feed-form select {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 1rem;
+    padding: 10px 12px;
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+
+  #add-form input:focus, #add-form select:focus,
+  #feed-form input:focus, #feed-form select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  #cf-new-color {
+    width: 100%;
+    height: 44px;
+    padding: 4px;
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    background: var(--surface-2);
+    cursor: pointer;
+  }
+
+  /* ---- Agenda view ---- */
+  #agenda-container {
+    display: none;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    padding: 0 16px 80px;
+    max-width: 720px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .agenda-day-section { margin-bottom: 10px; }
+
+  .agenda-date-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    color: var(--muted);
+    padding: 16px 4px 8px;
+    background: linear-gradient(var(--bg) 70%, transparent);
+    backdrop-filter: blur(2px);
+  }
+
+  .agenda-date-header.today-header { color: var(--accent); }
+
+  .agenda-event-row {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    padding: 11px 12px;
+    margin-bottom: 7px;
+    border-radius: 14px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 6px 22px rgba(0,0,0,0.28);
+    cursor: pointer;
+    transition: background 0.13s, transform 0.06s;
+  }
+
+  .agenda-event-row:hover { background: var(--surface-2); }
+  .agenda-event-row:active { transform: scale(0.99); }
+
+  .agenda-dot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .agenda-time {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--muted);
+    width: 68px;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .agenda-title {
+    font-size: 1.08rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .agenda-person {
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+    padding: 4px 11px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 160px;
+  }
+
+  .agenda-empty { color: var(--faint); text-align: center; margin-top: 60px; font-size: 1rem; }
+
+  /* Native select option popups can't use transparent/semi-transparent
+     backgrounds — on Windows/Edge with a light OS theme the popup renders
+     against a white base, making the overlay invisible. Force opaque colors
+     on option elements so the popup is always readable regardless of OS theme. */
+  :root, body { color-scheme: dark; }
+  body.light-ui { color-scheme: light; }
+  body:not(.light-ui) select option {
+    background: #1a2420;
+    color: #f0f0f0;
+  }
+  body.light-ui select option {
+    background: #ffffff;
+    color: #1a1a1f;
+  }
+
+  /* ============================================================
+     Named themes — each sets the palette variables + page backdrop.
+     `data-theme` drives the palette; `.light-ui` (added in JS for
+     light-background themes) re-skins modals/inputs to light chrome.
+     ============================================================ */
+
+  body[data-theme="dark"] {
+    background:
+      radial-gradient(1100px 760px at 12% -5%, rgba(61,214,224,0.24), transparent 60%),
+      radial-gradient(1000px 700px at 105% 105%, rgba(76,141,255,0.20), transparent 55%),
+      linear-gradient(160deg, #0b2138 0%, #0a2430 45%, #062730 100%);
+    background-attachment: fixed;
+  }
+
+  body[data-theme="light"] {
+    --bg: #f6f6f8; --surface: #ffffff; --surface-2: #ececf1;
+    --text: #1a1a1f; --muted: rgba(26,26,31,0.5); --faint: rgba(26,26,31,0.32);
+    --grid-line: rgba(0,0,0,0.08); --hairline: rgba(0,0,0,0.1);
+    --accent: #4c8dff;
+    background: linear-gradient(160deg,#fafbff 0%,#f1f3f8 100%);
+    background-attachment: fixed;
+  }
+
+  /* Glitter — pink/lavender sparkle (playful) */
+  body[data-theme="glitter"] {
+    --bg: #fff0f7; --surface: #ffffff; --surface-2: #ffe1ef;
+    --text: #4a1d3f; --muted: rgba(74,29,63,0.55); --faint: rgba(74,29,63,0.35);
+    --grid-line: rgba(236,72,153,0.12); --hairline: rgba(236,72,153,0.22);
+    --accent: #ec4899;
+    background:
+      radial-gradient(900px 600px at 10% -10%, rgba(244,114,182,0.35), transparent 60%),
+      radial-gradient(800px 600px at 100% 110%, rgba(168,85,247,0.28), transparent 55%),
+      linear-gradient(160deg,#ffe1f0 0%,#f3e8ff 55%,#fce7f3 100%);
+    background-attachment: fixed;
+  }
+
+  /* Sports — bold field-green + jersey orange (energetic) */
+  body[data-theme="sports"] {
+    --bg: #0a1622; --surface: rgba(255,255,255,0.06); --surface-2: rgba(255,255,255,0.13);
+    --text: #eef6ff; --muted: rgba(238,246,255,0.62); --faint: rgba(238,246,255,0.38);
+    --grid-line: rgba(255,255,255,0.07); --hairline: rgba(255,255,255,0.16);
+    --accent: #22c55e;
+    background:
+      radial-gradient(1000px 700px at 0% -10%, rgba(34,197,94,0.22), transparent 60%),
+      radial-gradient(900px 650px at 105% 110%, rgba(249,115,22,0.20), transparent 55%),
+      linear-gradient(160deg,#0b2a1a 0%,#0a1622 55%,#0a1420 100%);
+    background-attachment: fixed;
+  }
+
+  /* Beach — sand, turquoise, coral */
+  body[data-theme="beach"] {
+    --bg: #f0fbff; --surface: #ffffff; --surface-2: #d9f3f7;
+    --text: #0c3a44; --muted: rgba(12,58,68,0.55); --faint: rgba(12,58,68,0.35);
+    --grid-line: rgba(6,182,212,0.12); --hairline: rgba(6,182,212,0.22);
+    --accent: #06b6d4;
+    background:
+      radial-gradient(900px 600px at 100% 0%, rgba(251,113,133,0.18), transparent 55%),
+      linear-gradient(160deg,#fef3c7 0%,#cffafe 55%,#a5f3fc 100%);
+    background-attachment: fixed;
+  }
+
+  /* Forest — deep greens, lime accent */
+  body[data-theme="forest"] {
+    --bg: #0c1f17; --surface: rgba(255,255,255,0.05); --surface-2: rgba(255,255,255,0.12);
+    --text: #e9f5ec; --muted: rgba(233,245,236,0.6); --faint: rgba(233,245,236,0.36);
+    --grid-line: rgba(255,255,255,0.06); --hairline: rgba(255,255,255,0.14);
+    --accent: #84cc16;
+    background:
+      radial-gradient(1000px 700px at 8% -8%, rgba(132,204,22,0.18), transparent 60%),
+      linear-gradient(160deg,#13301f 0%,#0c1f17 60%,#0a1a13 100%);
+    background-attachment: fixed;
+  }
+
+  /* Mountains — cool slate + alpine snow */
+  body[data-theme="mountains"] {
+    --bg: #eef2f6; --surface: #ffffff; --surface-2: #dde5ec;
+    --text: #1e293b; --muted: rgba(30,41,59,0.55); --faint: rgba(30,41,59,0.35);
+    --grid-line: rgba(30,41,59,0.1); --hairline: rgba(30,41,59,0.18);
+    --accent: #2563eb;
+    background:
+      radial-gradient(900px 650px at 100% 0%, rgba(37,99,235,0.10), transparent 55%),
+      linear-gradient(160deg,#e2e8f0 0%,#cbd5e1 55%,#dbeafe 100%);
+    background-attachment: fixed;
+  }
+
+  /* ============================================================
+     Theme FX overlay — #theme-fx div managed by applyTheme()
+     Sits at z-index 0 / pointer-events none above body gradient.
+     ============================================================ */
+  #theme-fx {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+  }
+
+  /* --- Glitter: rainbow sheen sweep + two layers of twinkling sparkle dots --- */
+  @keyframes glitter-sheen {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  @keyframes twinkle-a {
+    0%, 100% { opacity: 0.08; }
+    22%      { opacity: 0.75; }
+    55%      { opacity: 0.12; }
+  }
+  @keyframes twinkle-b {
+    0%, 100% { opacity: 0.72; }
+    32%      { opacity: 0.07; }
+    68%      { opacity: 0.60; }
+  }
+
+  #theme-fx.glitter {
+    background: linear-gradient(125deg,
+      transparent 0%,
+      rgba(255,215,0,0.05) 12%,
+      rgba(255,105,180,0.08) 28%,
+      rgba(192,132,252,0.06) 44%,
+      transparent 52%,
+      rgba(255,255,255,0.07) 68%,
+      rgba(255,20,147,0.05) 84%,
+      transparent 100%);
+    background-size: 300% 300%;
+    animation: glitter-sheen 5s ease infinite;
+  }
+  #theme-fx.glitter::before,
+  #theme-fx.glitter::after { content: ''; position: absolute; inset: 0; }
+
+  /* Layer A — gold / pink / purple dots */
+  #theme-fx.glitter::before {
+    background-image:
+      radial-gradient(circle at  3%  8%, #ffd700 1.5px, transparent 2px),
+      radial-gradient(circle at  9% 23%, #ff69b4 1px,   transparent 1.5px),
+      radial-gradient(circle at 16%  5%, #c084fc 2px,   transparent 2.5px),
+      radial-gradient(circle at 23% 36%, #ffd700 1px,   transparent 1.5px),
+      radial-gradient(circle at 30% 16%, #ffffff 1.5px, transparent 2px),
+      radial-gradient(circle at 37% 44%, #ff1493 1px,   transparent 1.5px),
+      radial-gradient(circle at 44%  9%, #e879f9 2px,   transparent 2.5px),
+      radial-gradient(circle at 51% 29%, #ffd700 1.5px, transparent 2px),
+      radial-gradient(circle at 58% 52%, #ff69b4 1px,   transparent 1.5px),
+      radial-gradient(circle at 65% 13%, #ffffff 2px,   transparent 2.5px),
+      radial-gradient(circle at 72% 39%, #ffd700 1px,   transparent 1.5px),
+      radial-gradient(circle at 79% 23%, #c084fc 1.5px, transparent 2px),
+      radial-gradient(circle at 86% 47%, #ff1493 1px,   transparent 1.5px),
+      radial-gradient(circle at 92% 11%, #ffd700 2px,   transparent 2.5px),
+      radial-gradient(circle at 97% 31%, #ff69b4 1.5px, transparent 2px),
+      radial-gradient(circle at  6% 57%, #e879f9 1px,   transparent 1.5px),
+      radial-gradient(circle at 14% 71%, #ffd700 1.5px, transparent 2px),
+      radial-gradient(circle at 22% 84%, #ffffff 1px,   transparent 1.5px),
+      radial-gradient(circle at 29% 63%, #ff69b4 2px,   transparent 2.5px),
+      radial-gradient(circle at 36% 79%, #ffd700 1px,   transparent 1.5px),
+      radial-gradient(circle at 43% 93%, #c084fc 1.5px, transparent 2px),
+      radial-gradient(circle at 50% 69%, #ff1493 1px,   transparent 1.5px),
+      radial-gradient(circle at 57% 86%, #ffd700 2px,   transparent 2.5px),
+      radial-gradient(circle at 64% 74%, #e879f9 1.5px, transparent 2px),
+      radial-gradient(circle at 71% 91%, #ffffff 1px,   transparent 1.5px),
+      radial-gradient(circle at 78% 67%, #ff69b4 1.5px, transparent 2px),
+      radial-gradient(circle at 85% 82%, #ffd700 1px,   transparent 1.5px),
+      radial-gradient(circle at 93% 59%, #c084fc 2px,   transparent 2.5px),
+      radial-gradient(circle at 11% 46%, #ffd700 1px,   transparent 1.5px),
+      radial-gradient(circle at 48% 56%, #e879f9 2px,   transparent 2.5px),
+      radial-gradient(circle at 75% 53%, #ff69b4 1px,   transparent 1.5px),
+      radial-gradient(circle at 33% 96%, #ff1493 1.5px, transparent 2px),
+      radial-gradient(circle at 67% 33%, #ffffff 1px,   transparent 1.5px),
+      radial-gradient(circle at 89% 96%, #ffd700 1.5px, transparent 2px);
+    animation: twinkle-a 2.4s ease-in-out infinite;
+  }
+
+  /* Layer B — offset positions, opposite phase */
+  #theme-fx.glitter::after {
+    background-image:
+      radial-gradient(circle at  7% 18%, #ff69b4 2px,   transparent 2.5px),
+      radial-gradient(circle at 13% 39%, #ffd700 1px,   transparent 1.5px),
+      radial-gradient(circle at 20% 12%, #c084fc 1.5px, transparent 2px),
+      radial-gradient(circle at 27% 49%, #ffffff 1px,   transparent 1.5px),
+      radial-gradient(circle at 34% 26%, #ff1493 2px,   transparent 2.5px),
+      radial-gradient(circle at 41% 59%, #ffd700 1.5px, transparent 2px),
+      radial-gradient(circle at 48% 19%, #e879f9 1px,   transparent 1.5px),
+      radial-gradient(circle at 55% 41%, #ff69b4 2px,   transparent 2.5px),
+      radial-gradient(circle at 62% 22%, #ffd700 1.5px, transparent 2px),
+      radial-gradient(circle at 69% 56%, #ffffff 1px,   transparent 1.5px),
+      radial-gradient(circle at 76% 36%, #c084fc 2px,   transparent 2.5px),
+      radial-gradient(circle at 83% 15%, #ffd700 1px,   transparent 1.5px),
+      radial-gradient(circle at 90% 49%, #ff1493 1.5px, transparent 2px),
+      radial-gradient(circle at 96% 26%, #e879f9 2px,   transparent 2.5px),
+      radial-gradient(circle at  5% 73%, #ffd700 1px,   transparent 1.5px),
+      radial-gradient(circle at 12% 86%, #ff69b4 1.5px, transparent 2px),
+      radial-gradient(circle at 24% 66%, #ffffff 2px,   transparent 2.5px),
+      radial-gradient(circle at 38% 89%, #ffd700 1px,   transparent 1.5px),
+      radial-gradient(circle at 53% 76%, #c084fc 1.5px, transparent 2px),
+      radial-gradient(circle at 67% 93%, #ff1493 1px,   transparent 1.5px),
+      radial-gradient(circle at 81% 71%, #ffd700 2px,   transparent 2.5px),
+      radial-gradient(circle at 94% 83%, #e879f9 1.5px, transparent 2px),
+      radial-gradient(circle at 30% 53%, #ff69b4 1px,   transparent 1.5px),
+      radial-gradient(circle at 59% 63%, #ffd700 1.5px, transparent 2px),
+      radial-gradient(circle at 45% 33%, #ffffff 1px,   transparent 1.5px),
+      radial-gradient(circle at 72% 79%, #ff69b4 2px,   transparent 2.5px),
+      radial-gradient(circle at 18% 96%, #ffd700 1px,   transparent 1.5px),
+      radial-gradient(circle at 87% 63%, #c084fc 1.5px, transparent 2px),
+      radial-gradient(circle at  4% 36%, #ff1493 1px,   transparent 1.5px),
+      radial-gradient(circle at 99% 71%, #ffd700 2px,   transparent 2.5px);
+    animation: twinkle-b 3.2s ease-in-out infinite;
+  }
+
+  /* --- Sports: tiling emoji-ball pattern --- */
+  /* ⚽ = %E2%9A%BD  🏀 = %F0%9F%8F%80  🏈 = %F0%9F%8F%88  🎾 = %F0%9F%8F%BE */
+  #theme-fx.sports {
+    opacity: 0.09;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Ctext x='8' y='80' font-size='58'%3E%E2%9A%BD%3C/text%3E%3Ctext x='108' y='175' font-size='52'%3E%F0%9F%8F%80%3C/text%3E%3Ctext x='10' y='185' font-size='44'%3E%F0%9F%8F%88%3C/text%3E%3Ctext x='118' y='78' font-size='46'%3E%F0%9F%8F%BE%3C/text%3E%3C/svg%3E");
+    background-size: 200px 200px;
+    background-repeat: repeat;
+  }
+
+  /* ---- Light-UI chrome (applied to light-background themes) ---- */
+  body.light-ui .day-cell.today { background: rgba(76,141,255,0.08); }
+  body.light-ui #add-btn { background: var(--accent); }
+  body.light-ui #add-btn:hover { filter: brightness(0.92); }
+  body.light-ui #feed-btn { background: #e4e4ea; color: #555; }
+  body.light-ui #feed-btn:hover { background: #d4d4dc; color: #222; }
+  body.light-ui #detail-modal,
+  body.light-ui #add-modal,
+  body.light-ui #feed-modal { background: #fff; border-color: #e0e0e6; color: #1a1a1f; }
+  body.light-ui #detail-close { color: #888; }
+  body.light-ui #detail-close:hover { color: #111; }
+  body.light-ui .filter-chip { color: #111; }
+  body.light-ui .person-chip { color: #111; }
+  body.light-ui #add-form input[type=text],
+  body.light-ui #add-form input[type=date],
+  body.light-ui #add-form input[type=time],
+  body.light-ui #add-form select,
+  body.light-ui #feed-form input[type=text],
+  body.light-ui #feed-form select { background: #f0f0f3; border-color: #ccc; color: #1a1a1f; }
+  body.light-ui #cf-new-color { background: #f0f0f3; border-color: #ccc; }
+  body.light-ui #ae-cancel, body.light-ui #cf-cancel { background: #e4e4ea; color: #555; }
+  body.light-ui #ae-cancel:hover, body.light-ui #cf-cancel:hover { background: #d4d4dc; color: #111; }
+  body.light-ui .agenda-date-header.today-header { color: var(--accent); }
+
+  /* Auth overlay */
+  #auth-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.88);
+    z-index: 300;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(8px);
+  }
+  #auth-overlay.open { display: flex; }
+
+  #auth-modal {
+    background: rgba(255,255,255,0.09);
+    border: 1px solid var(--hairline);
+    border-radius: 18px;
+    backdrop-filter: blur(28px);
+    box-shadow: 0 18px 50px rgba(0,0,0,0.5);
+    padding: 32px 28px;
+    width: 90%;
+    max-width: 360px;
+    color: #fff;
+    text-align: center;
+  }
+
+  #auth-modal h2 { margin: 0 0 8px; font-size: 1.3rem; font-weight: 800; }
+  #auth-modal p { margin: 0 0 20px; font-size: 0.9rem; color: var(--muted); }
+
+  #auth-password {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 1rem;
+    padding: 12px 14px;
+    min-height: 44px;
+    box-sizing: border-box;
+    margin-bottom: 12px;
+  }
+  #auth-password:focus { outline: none; border-color: var(--accent); }
+
+  #auth-submit {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent);
+    color: #053038;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    min-height: 44px;
+  }
+  #auth-submit:hover { background: #5ce4ee; }
+  #auth-submit:disabled { opacity: 0.45; cursor: default; }
+
+  #auth-error { color: #ff8888; font-size: 0.9rem; margin-top: 12px; display: none; }
+
+  #signin-btn, #signout-btn {
+    background: none;
+    border: 1px solid var(--hairline);
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: none;
+    white-space: nowrap;
+  }
+  #signin-btn:hover, #signout-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  /* Hidden until authenticated */
+  #add-btn, #feed-btn { display: none; }
+
+  /* ==== TAB BAR (Calendar / Meals / To-Do) ==== */
+  #tab-bar {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--hairline);
+    flex-shrink: 0;
+  }
+
+  /* Invisible to layout on desktop (children behave exactly as if this
+     wrapper didn't exist — each keeps its own flex:1/overflow-y:auto). On
+     mobile this becomes the single scrolling region (see media query below),
+     so #header/#tab-bar sit permanently outside any scrollable area and
+     never need position:sticky at all — same proven approach desktop
+     already uses, just applied to the whole content block on mobile too. */
+  #content-scroll { display: contents; }
+  .tab-btn {
+    background: var(--surface-2);
+    border: none;
+    color: var(--text);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 7px 16px;
+    border-radius: 999px;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.15s, background 0.15s;
+  }
+  .tab-btn:hover { opacity: 0.85; }
+  .tab-btn.active { opacity: 1; background: var(--accent); color: #053038; }
+
+  /* Calendar-only elements are hidden while the Meals/To-Do tab is active. */
+  body[data-tab="meals"] .calendar-only,
+  body[data-tab="todos"] .calendar-only { display: none !important; }
+
+  #meals-view, #todos-view {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  body[data-tab="meals"] #meals-view { display: flex; }
+  body[data-tab="todos"] #todos-view { display: flex; }
+
+  /* ==== MEAL PLANNER ==== */
+  #meals-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--hairline);
+    flex-shrink: 0;
+  }
+  #meals-week-label { font-weight: 700; font-size: 1rem; }
+
+  /* A vertically-scrolling list of day sections, styled like the app's
+     existing Agenda view (sticky date headers, card-style rows) rather than
+     a spreadsheet grid — one scroll axis, reads like a modern list. */
+  #meals-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 16px 90px;
+    max-width: 720px;
+    width: 100%;
+    margin: 0 auto;
+    box-sizing: border-box;
+  }
+
+  .meal-day-section { margin-bottom: 14px; }
+
+  .meal-day-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    color: var(--muted);
+    padding: 16px 4px 8px;
+    background: linear-gradient(var(--bg) 70%, transparent);
+    backdrop-filter: blur(2px);
+  }
+  .meal-day-header.today-header { color: var(--accent); }
+
+  .meal-slot { padding: 4px 2px 10px; }
+  .meal-slot-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 2px 6px;
+  }
+  .meal-slot-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .meal-slot-add {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 6px;
+    opacity: 0.85;
+  }
+  .meal-slot-add:hover { opacity: 1; background: var(--surface-2); }
+
+  .meal-item-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--surface);
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .meal-item-row:hover { background: var(--surface-2); }
+  .meal-item-dot { display: flex; align-items: center; flex-shrink: 0; }
+  .meal-item-title { flex: 1; min-width: 0; font-size: 0.92rem; overflow-wrap: break-word; }
+  .meal-item-person { font-size: 0.74rem; color: var(--muted); flex-shrink: 0; }
+
+  /* ==== TO-DO ==== */
+  #todo-add-form {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--hairline);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  #todo-add-title { flex: 1 1 160px; }
+  .todo-due-field { display: flex; flex-direction: column; gap: 3px; }
+  .todo-due-field label { font-size: 0.68rem; font-weight: 600; color: var(--muted); }
+  .todo-people-field { display: flex; flex-direction: column; gap: 3px; }
+  .todo-people-field label { font-size: 0.68rem; font-weight: 600; color: var(--muted); }
+  .todo-people-field .person-chip-row { margin-top: 0; }
+  .todo-repeat-field { display: flex; flex-direction: column; gap: 3px; }
+  .todo-repeat-field label { font-size: 0.68rem; font-weight: 600; color: var(--muted); }
+  #todo-add-repeat {
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.95rem;
+    padding: 9px 12px;
+    min-height: 40px;
+    box-sizing: border-box;
+  }
+  #todo-add-form input, #todo-add-form select {
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.95rem;
+    padding: 9px 12px;
+    min-height: 40px;
+    box-sizing: border-box;
+  }
+  #todo-add-form button {
+    background: var(--accent);
+    color: #053038;
+    border: none;
+    border-radius: 8px;
+    font-weight: 700;
+    padding: 9px 16px;
+    cursor: pointer;
+    min-height: 40px;
+  }
+  #todos-list { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 14px 90px; }
+  .todo-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 4px;
+    border-bottom: 1px solid var(--grid-line);
+  }
+  .todo-row input[type=checkbox] { width: 20px; height: 20px; cursor: pointer; accent-color: var(--accent); flex-shrink: 0; }
+  /* The title is the content — it gets the leftover space and is the last
+     thing allowed to shrink. */
+  .todo-title { flex: 1 1 auto; min-width: 0; overflow-wrap: break-word; cursor: pointer; }
+  .todo-row.done .todo-title { text-decoration: line-through; opacity: 0.5; }
+  .todo-person-dot { display: flex; align-items: center; flex-shrink: 0; }
+  /* Must be allowed to shrink and must be capped: with several assignees the
+     joined list ("Jackie, Abbie, Hayden, Ray") is long, and as an unshrinkable
+     item it starved .todo-title down to ~zero width, which then wrapped one
+     character per line. The badges already identify who — this text is a
+     secondary label, so truncating it is the right trade. */
+  .todo-person-name {
+    font-size: 0.74rem;
+    color: var(--muted);
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .todo-due { font-size: 0.72rem; color: var(--muted); flex-shrink: 0; }
+  .todo-delete {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 2px 6px;
+    flex-shrink: 0;
+  }
+  .todo-delete:hover { color: #ff8888; }
+  #todos-empty { color: var(--muted); font-size: 0.85rem; padding: 20px; text-align: center; }
+
+  /* Read-only (lapsed subscription): hide add/edit/toggle controls here too,
+     same rule as #add-btn/#feed-btn above (server enforces this too, 402). */
+  body.read-only .meal-item-row,
+  body.read-only .meal-slot-add,
+  body.read-only #todo-add-form { pointer-events: none; opacity: 0.5; }
+  body.read-only .todo-row { cursor: default; }
+  body.read-only .todo-title { pointer-events: none; }
+  body.read-only .todo-row input[type=checkbox],
+  body.read-only .todo-delete { display: none !important; }
+
+  #meal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.78);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overflow-y: auto;
+  }
+  #meal-overlay.open { display: flex; }
+  #meal-modal {
+    background: rgba(255,255,255,0.09);
+    border: 1px solid var(--hairline);
+    border-radius: 18px;
+    backdrop-filter: blur(28px);
+    box-shadow: 0 18px 50px rgba(0,0,0,0.5);
+    padding: 24px;
+    width: 90%;
+    max-width: 380px;
+    color: #fff;
+    max-height: 92vh;
+    max-height: 92dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #meal-modal h2 { margin: 0 0 16px; font-size: 1.2rem; font-weight: 700; }
+  #meal-form label { display: block; font-size: 0.78rem; opacity: 0.6; margin: 14px 0 4px; }
+  #meal-form input[type=text],
+  #meal-form input[type=date],
+  #meal-form select {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 1rem;
+    padding: 10px 12px;
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+  #meal-form input:focus, #meal-form select:focus { outline: none; border-color: var(--accent); }
+
+  #todo-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.78);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overflow-y: auto;
+  }
+  #todo-overlay.open { display: flex; }
+  #todo-modal {
+    background: rgba(255,255,255,0.09);
+    border: 1px solid var(--hairline);
+    border-radius: 18px;
+    backdrop-filter: blur(28px);
+    box-shadow: 0 18px 50px rgba(0,0,0,0.5);
+    padding: 24px;
+    width: 90%;
+    max-width: 380px;
+    color: #fff;
+    max-height: 92vh;
+    max-height: 92dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #todo-modal h2 { margin: 0 0 16px; font-size: 1.2rem; font-weight: 700; }
+  #todo-edit-form label { display: block; font-size: 0.78rem; opacity: 0.6; margin: 14px 0 4px; }
+  #todo-edit-form input[type=text],
+  #todo-edit-form input[type=date],
+  #todo-edit-form select {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 1rem;
+    padding: 10px 12px;
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+  #todo-edit-form input:focus, #todo-edit-form select:focus { outline: none; border-color: var(--accent); }
+
+  body.light-ui #meal-modal { background: #fff; border-color: #e0e0e6; color: #1a1a1f; }
+  body.light-ui #todo-modal { background: #fff; border-color: #e0e0e6; color: #1a1a1f; }
+  body.light-ui #todo-edit-form input[type=text],
+  body.light-ui #todo-edit-form input[type=date],
+  body.light-ui #todo-edit-form select,
+  body.light-ui #todo-add-repeat { background: #f0f0f3; border-color: #ccc; color: #1a1a1f; }
+  body.light-ui #meal-form input[type=text],
+  body.light-ui #meal-form input[type=date],
+  body.light-ui #todo-add-form input { background: #f0f0f3; border-color: #ccc; color: #1a1a1f; }
+  body.light-ui .meal-item-row { color: #111; }
+
+  @media (max-width: 700px) {
+    #feed-btn { bottom: 16px; left: 16px; width: 48px; height: 48px; font-size: 1.1rem; }
+
+    /* html/body stay exactly as the desktop rules define them (fixed to the
+       viewport, overflow:hidden) — no page-level scrolling at all, same as
+       desktop. #content-scroll (display:contents on desktop, see base rules)
+       becomes the ONE actual scrolling region here instead, so #header and
+       #tab-bar sit permanently outside it and never move. Two earlier
+       attempts tried to make the whole page scroll and keep #tab-bar
+       "sticky" over it (via html,body overflow-y:auto, then via
+       position:sticky) — both failed for real, verified-in-a-real-browser
+       reasons: overflow:auto turns html/body into a "scroll container" for
+       sticky purposes even when their own box never overflows (since
+       height:auto always grows to match content), which breaks sticky
+       entirely; removing that still didn't leave a reliable dedicated
+       scroller. Giving #content-scroll its own bounded, scrollable box is
+       the same technique that already makes header/tab-bar immovable on
+       desktop — it's just not scoped to mobile-only there. */
+    #content-scroll {
+      display: block;
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    #header {
+      font-size: 1.1rem;
+      padding: 10px 12px;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    #header .clock { display: none; }
+
+    /* Mobile is agenda-only: hide the grid toggle and the month-nav controls
+       (agenda is a rolling list, not paged by month), and let the header flow as a
+       simple row so the theme/settings icons stop overlapping the title. */
+    #view-btn { display: none; }
+    #header .nav-btn { display: none; }
+    #today-btn { display: none; }
+    #month-label { flex: 1; text-align: left; font-size: 1.15rem; }
+    #header-right { position: static; right: auto; gap: 4px; }
+    #grid { display: none !important; }
+
+    /* Wrap filter chips onto multiple rows so none are hidden off-screen. */
+    #filter-bar { flex-wrap: wrap; overflow-x: visible; }
+
+    #add-btn { bottom: 16px; right: 16px; width: 48px; height: 48px; font-size: 1.6rem; }
+
+    #add-modal, #detail-modal { width: 95%; padding: 16px; }
+
+    /* Agenda: wrap so full titles show and the person chip flows to a second line */
+    #agenda-container { padding: 0 10px 90px; }
+    .agenda-event-row {
+      flex-wrap: wrap;
+      column-gap: 12px;
+      row-gap: 4px;
+      padding: 11px 12px;
+    }
+    .agenda-time { width: 56px; font-size: 0.78rem; }
+    .agenda-title {
+      flex: 1 1 120px;
+      white-space: normal;
+      font-size: 0.98rem;
+    }
+    /* margin-left:auto keeps the name pill pinned to the right edge whether it
+       fits on the first line or wraps to its own second line. Without it, a
+       wrapped pill (multiple names are wider, e.g. "ABBIE, JACKIE") lands
+       flush LEFT because flex rows start-align, so the label jumped sides
+       depending on how many people were assigned. */
+    .agenda-person { flex: 0 0 auto; font-size: 0.72rem; margin-left: auto; }
+
+    #tab-bar { padding: 6px 10px; }
+    #meals-list { padding: 0 10px 90px; }
+    #meal-modal { width: 95%; padding: 16px; }
+    #todo-modal { width: 95%; padding: 16px; }
+    #todo-add-form { padding: 10px; }
+    #todo-add-title, .todo-people-field, .todo-due-field, .todo-repeat-field { flex: 1 1 100%; }
+    .todo-due-field input, #todo-add-repeat { width: 100%; }
+
+    /* On a phone the row can't fit badges + a full name list + due + delete
+       AND leave the title readable — with several assignees the title was
+       being squeezed to ~40px. Let the row wrap and push the name list onto
+       its own line (order:10 keeps due/delete up on the first line, since
+       they come earlier in DOM order but would otherwise wrap after it). The
+       title therefore always owns the first line. */
+    .todo-row { flex-wrap: wrap; row-gap: 2px; }
+    .todo-person-name {
+      order: 10;
+      flex: 1 0 100%;
+      max-width: none;
+      white-space: normal;
+      padding-left: 30px;   /* line up under the title, past the checkbox */
+    }
+  }
+</style>
+</head>
+<body>
+
+<div id="auth-overlay" role="dialog" aria-modal="true" aria-label="Sign in">
+  <div id="auth-modal">
+    <h2>Sign in to Kinboard</h2>
+    <p id="auth-desc">Enter the household password.</p>
+    <form id="auth-form" autocomplete="off">
+      <input id="auth-password" type="password" placeholder="Household password" autocomplete="current-password" required />
+      <button id="auth-submit" type="submit">Sign in</button>
+    </form>
+    <div id="auth-error"></div>
+  </div>
+</div>
+
+<div id="header">
+  <button id="view-btn" title="Toggle agenda view" aria-label="Toggle agenda view">☰</button>
+  <button id="today-btn">Today</button>
+  <button class="nav-btn" id="prev-month">&#8249;</button>
+  <div id="month-label">Loading...</div>
+  <button class="nav-btn" id="next-month">&#8250;</button>
+  <div id="header-right">
+    <div class="clock" id="clock"></div>
+    <button id="theme-btn" title="Change theme" aria-label="Change theme">🎨</button>
+    <a id="settings-link" href="/settings" title="Settings" aria-label="Settings">⚙</a>
+    <button id="signin-btn">Sign in</button>
+    <button id="signout-btn">Sign out</button>
+  </div>
+</div>
+
+<div id="readonly-banner">
+  👀 You're viewing this calendar without signing in.
+  <a href="#" onclick="showAuthOverlay(); return false;">Sign in</a> to add or edit events.
+</div>
+<style>
+  #readonly-banner { display: none; background: #374151; color: #fff; text-align: center; padding: 8px 14px; font-size: 14px; }
+  #readonly-banner a { color: #fff; text-decoration: underline; font-weight: 600; }
+  body.read-only #readonly-banner { display: block; }
+  /* Hide every write control for an unauthenticated viewer on a public
+     calendar; the API enforces this server-side too, this just keeps the UI
+     honest. */
+  body.read-only #add-btn,
+  body.read-only #feed-btn,
+  body.read-only #detail-edit,
+  body.read-only #detail-delete,
+  body.read-only #detail-delete-recurring { display: none !important; }
+</style>
+
+<div id="tab-bar">
+  <button class="tab-btn active" id="tab-btn-calendar" data-tab="calendar">📅 Calendar</button>
+  <button class="tab-btn" id="tab-btn-meals" data-tab="meals">🍽️ Meals</button>
+  <button class="tab-btn" id="tab-btn-todos" data-tab="todos">✅ To-Do</button>
+</div>
+
+<div id="content-scroll">
+  <div id="filter-bar" class="calendar-only"></div>
+  <div id="grid" class="calendar-only"></div>
+  <div id="agenda-container" class="calendar-only"></div>
+
+  <div id="meals-view">
+    <div id="meals-nav">
+      <button class="nav-btn" id="meals-prev">&#8249;</button>
+      <div id="meals-week-label">Loading...</div>
+      <button class="nav-btn" id="meals-next">&#8250;</button>
+    </div>
+    <div id="meals-list"></div>
+  </div>
+
+  <div id="todos-view">
+    <form id="todo-add-form" autocomplete="off">
+      <input id="todo-add-title" type="text" placeholder="Add a to-do..." required />
+      <div class="todo-people-field">
+        <label>For</label>
+        <div class="person-chip-row" id="todo-add-person-chips"></div>
+      </div>
+      <div class="todo-due-field">
+        <label for="todo-add-due">Due</label>
+        <input id="todo-add-due" type="date" />
+      </div>
+      <div class="todo-repeat-field">
+        <label for="todo-add-repeat">Repeat</label>
+        <select id="todo-add-repeat">
+          <option value="">Does not repeat</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+        </select>
+      </div>
+      <button type="submit">Add</button>
+    </form>
+    <div id="todos-list"></div>
+  </div>
+</div>
+
+<div id="detail-overlay" role="dialog" aria-modal="true" aria-label="Event detail">
+  <div id="detail-modal">
+    <button id="detail-close" aria-label="Close">&times;</button>
+    <div id="detail-title"></div>
+    <div id="detail-meta"></div>
+    <div id="detail-person-row">
+      <div id="detail-dot"></div>
+      <span id="detail-person"></span>
+      <div class="person-chip-row" id="detail-person-chips" style="display:none"></div>
+    </div>
+    <div id="detail-location"></div>
+    <button id="detail-edit">Edit Event</button>
+    <button id="detail-delete">Delete Event</button>
+    <div id="detail-delete-recurring" style="display:none">
+      <button id="detail-delete-one">Delete This Only</button>
+      <button id="detail-delete-all">Delete All</button>
+    </div>
+  </div>
+</div>
+
+<button id="feed-btn" class="calendar-only" title="Add calendar feed" aria-label="Add calendar feed">⚙</button>
+<button id="add-btn" class="calendar-only" title="Add event" aria-label="Add event">+</button>
+
+<div id="feed-overlay" role="dialog" aria-modal="true" aria-label="Add calendar feed">
+  <div id="feed-modal">
+    <h2>Add Calendar Feed</h2>
+    <form id="feed-form" autocomplete="off">
+
+      <label for="cf-url">iCal URL</label>
+      <input id="cf-url" type="text" placeholder="https://calendar.google.com/...basic.ics" required />
+
+      <label for="cf-name">Feed name</label>
+      <input id="cf-name" type="text" placeholder="e.g. Soccer Practice" required />
+
+      <label for="cf-icon">Icon (emoji, optional)</label>
+      <input id="cf-icon" type="text" placeholder="⚽" maxlength="4" />
+
+      <label for="cf-person">Person</label>
+      <select id="cf-person"></select>
+
+      <div id="cf-new-fields" style="display:none">
+        <label for="cf-new-name">New person name</label>
+        <input id="cf-new-name" type="text" placeholder="Name" />
+        <label for="cf-new-color">Color</label>
+        <input id="cf-new-color" type="color" value="#4682B4" />
+      </div>
+
+      <div class="ae-btns">
+        <button type="button" id="cf-cancel">Cancel</button>
+        <button type="submit" id="cf-submit">Add Feed</button>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+<div id="meal-overlay" role="dialog" aria-modal="true" aria-label="Add meal">
+  <div id="meal-modal">
+    <h2 id="meal-heading">Add Meal</h2>
+    <form id="meal-form" autocomplete="off">
+
+      <label for="ml-title">What</label>
+      <input id="ml-title" type="text" placeholder="e.g. Spaghetti" required />
+
+      <label for="ml-type">Meal</label>
+      <select id="ml-type">
+        <option value="breakfast">Breakfast</option>
+        <option value="lunch">Lunch</option>
+        <option value="dinner">Dinner</option>
+        <option value="snack">Snack</option>
+      </select>
+
+      <label for="ml-date">Date</label>
+      <input id="ml-date" type="date" required />
+
+      <label>People</label>
+      <div class="person-chip-row" id="ml-person-chips"></div>
+
+      <div class="ae-btns">
+        <button type="button" id="ml-cancel">Cancel</button>
+        <button type="button" id="ml-delete" style="display:none">Delete</button>
+        <button type="submit" id="ml-submit">Add Meal</button>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+<div id="todo-overlay" role="dialog" aria-modal="true" aria-label="Edit to-do">
+  <div id="todo-modal">
+    <h2>Edit To-Do</h2>
+    <form id="todo-edit-form" autocomplete="off">
+
+      <label for="td-title">Title</label>
+      <input id="td-title" type="text" required />
+
+      <label>People</label>
+      <div class="person-chip-row" id="td-person-chips"></div>
+
+      <label for="td-due">Due date <span style="opacity:0.5;font-weight:400">(optional)</span></label>
+      <input id="td-due" type="date" />
+
+      <label for="td-repeat">Repeat</label>
+      <select id="td-repeat">
+        <option value="">Does not repeat</option>
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+      </select>
+
+      <div class="ae-btns">
+        <button type="button" id="td-cancel">Cancel</button>
+        <button type="button" id="td-delete">Delete</button>
+        <button type="submit" id="td-submit">Save</button>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+<div id="add-overlay" role="dialog" aria-modal="true" aria-label="Add event">
+  <div id="add-modal">
+    <h2 id="ae-heading">Add Event</h2>
+    <form id="add-form" autocomplete="off">
+
+      <label for="ae-title">Title</label>
+      <input id="ae-title" type="text" placeholder="Event title" required />
+
+      <label for="ae-date">Date</label>
+      <input id="ae-date" type="date" required />
+
+      <div class="ae-check-row">
+        <input id="ae-allday" type="checkbox" />
+        <label for="ae-allday">All day</label>
+      </div>
+
+      <div id="ae-times">
+        <div class="ae-time-row">
+          <div>
+            <label for="ae-start">Start</label>
+            <input id="ae-start" type="time" />
+          </div>
+          <div>
+            <label for="ae-end">End</label>
+            <input id="ae-end" type="time" />
+          </div>
+        </div>
+      </div>
+
+      <div id="ae-repeat-row">
+        <label for="ae-repeat">Repeat</label>
+        <select id="ae-repeat">
+          <option value="none">Does not repeat</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="monthly_dow" id="ae-repeat-dow">Monthly on the …</option>
+          <option value="yearly">Yearly</option>
+          <option value="custom">Custom…</option>
+        </select>
+      </div>
+
+      <div id="ae-custom-row" style="display:none">
+        <label for="ae-custom-interval">Repeat every</label>
+        <div class="ae-custom-every-row">
+          <input id="ae-custom-interval" type="number" min="1" max="99" value="1" />
+          <select id="ae-custom-unit">
+            <option value="day">day(s)</option>
+            <option value="week" selected>week(s)</option>
+            <option value="month">month(s)</option>
+            <option value="year">year(s)</option>
+          </select>
+        </div>
+        <div id="ae-weekday-row">
+          <label>On these days</label>
+          <div class="ae-weekday-chips" id="ae-weekday-chips"></div>
+        </div>
+      </div>
+
+      <div id="ae-ends-row" style="display:none">
+        <label for="ae-ends-on">Ends on <span style="opacity:0.5;font-weight:400">(optional)</span></label>
+        <input id="ae-ends-on" type="date" />
+      </div>
+
+      <p id="ae-repeat-hint" class="ae-hint" style="display:none">
+        Repeat changes save to <strong>All Events</strong> in the series, not just this one.
+      </p>
+
+      <p id="ae-repeat-locked" class="ae-hint" style="display:none"></p>
+
+      <label>People</label>
+      <div class="person-chip-row" id="ae-person-chips"></div>
+
+      <label for="ae-location">Location <span style="opacity:0.5;font-weight:400">(optional)</span></label>
+      <input id="ae-location" type="text" placeholder="e.g. Soccer field, Home" />
+
+      <label for="ae-share">Sharing</label>
+      <select id="ae-share">
+        <option value="auto">Auto — share if the title matches a share word</option>
+        <option value="always">Always share on view-only links</option>
+        <option value="never">Never share (keep private)</option>
+      </select>
+      <p id="ae-share-hint" class="ae-hint"></p>
+
+      <div class="ae-btns">
+        <button type="button" id="ae-cancel">Cancel</button>
+        <button type="submit" id="ae-submit">Add Event</button>
+        <button type="button" id="ae-save-one" style="display:none">This Event</button>
+        <button type="button" id="ae-save-all" style="display:none">All Events</button>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+<script src="/kb-device.js"></script>
+<script>
+const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+let appConfig = null;
+let events = [];
+let viewOffset = 0;     // months from the current month (only used when !todayView)
+let todayView = true;   // true = rolling "Today" view; false = a full navigated month
+const mobileMQ = window.matchMedia('(max-width: 700px)');
+let viewMode = mobileMQ.matches ? 'agenda' : 'grid';
+let weatherData = null;
+let dailyWeather = {};
+let activeFilter = null;
+let editMode = null;
+let detailEv = null;
+let aePeople = [];       // people currently selected in the add/edit event form's chip row
+let detailPeople = [];   // people currently selected in the detail popup's edit-mode chip row
+let authed = false; // set from /api/config's `authed` field and by login/logout
+
+// Authenticated API call. The session lives in an httpOnly cookie sent
+// automatically with same-origin requests — no bearer token to attach or
+// refresh client-side. A 401 means the cookie is missing/expired (or nobody's
+// logged in yet); show the password prompt.
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(path, { ...opts, credentials: 'same-origin' });
+  if (res.status === 401) {
+    authed = false;
+    updateAuthUI();
+    showAuthOverlay();
+  }
+  return res;
+}
+
+function updateAuthUI() {
+  document.getElementById('add-btn').style.display = authed ? 'flex' : 'none';
+  document.getElementById('settings-link').style.display = authed ? 'inline-flex' : 'none';
+  const signinBtn = document.getElementById('signin-btn');
+  const signoutBtn = document.getElementById('signout-btn');
+  signinBtn.style.display = (!authed && appConfig && appConfig.isPublic) ? 'inline-block' : 'none';
+  signoutBtn.style.display = authed ? 'inline-block' : 'none';
+}
+
+function showAuthOverlay() {
+  document.getElementById('auth-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('auth-password').focus(), 50);
+}
+
+function hideAuthOverlay() {
+  document.getElementById('auth-overlay').classList.remove('open');
+}
+
+function toDateInputValue(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// Express an ISO instant as { date, time } wall-clock in the display timezone — used to
+// pre-fill the edit form so values round-trip correctly regardless of the device's zone.
+function tzParts(iso) {
+  const tz = (appConfig && appConfig.timeZone) || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const f = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  });
+  const p = f.formatToParts(new Date(iso)).reduce((a, x) => { a[x.type] = x.value; return a; }, {});
+  return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` };
+}
+
+// Per-person emoji (from /api/config). Prefixes names in the UI when set.
+function emojiFor(name) {
+  return (appConfig && appConfig.emojis && appConfig.emojis[name]) || '';
+}
+function withEmoji(name) {
+  const e = emojiFor(name);
+  return e ? `${e} ${name}` : name;
+}
+
+// ==== PERSON ASSIGNMENT: shared multi-select chip row + read-only badge row ====
+
+// Toggleable pill per name (same visual language as .filter-chip), builds
+// `selected` (an array the caller owns and mutates in place) into `people`
+// payloads. `exclude` defaults to hiding only the internal 'default' bucket —
+// callers that shouldn't offer category pseudo-people (meals/todos) pass
+// NON_PERSON_NAMES instead.
+function renderPersonChips(containerId, selected, exclude, onChange) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const skip = exclude || new Set(['default']);
+  container.innerHTML = '';
+  if (!appConfig || !appConfig.colors) return;
+  for (const [name, color] of Object.entries(appConfig.colors)) {
+    if (skip.has(name)) continue;
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'person-chip' + (selected.includes(name) ? ' active' : '');
+    chip.dataset.person = name;
+    chip.textContent = withEmoji(name);
+    chip.style.setProperty('--chip-color', color);
+    chip.addEventListener('click', () => {
+      const idx = selected.indexOf(name);
+      if (idx >= 0) selected.splice(idx, 1); else selected.push(name);
+      renderPersonChips(containerId, selected, exclude, onChange);
+      if (onChange) onChange([...selected]);
+    });
+    container.appendChild(chip);
+  }
+}
+
+// One colored circle carrying that person's emoji (or initial letter) —
+// deliberately not a plain color dot, so who's attached is obvious without
+// having to memorize a color-to-person mapping.
+function personBadge(name, size) {
+  const b = document.createElement('div');
+  b.className = 'person-badge';
+  b.style.width = size + 'px';
+  b.style.height = size + 'px';
+  b.style.fontSize = Math.max(9, Math.round(size * 0.52)) + 'px';
+  const colors = (appConfig && appConfig.colors) || {};
+  b.style.background = (name && colors[name]) || '#888';
+  b.textContent = name ? (emojiFor(name) || name[0].toUpperCase()) : '';
+  if (name) b.title = name;
+  return b;
+}
+
+// Row of badges for a `people` array, capped at `maxVisible` with a "+N" text
+// suffix for the rest (the full name list is always shown as text alongside
+// this row wherever it's used, so nobody's actually hidden — just not badged).
+function renderPersonBadgeRow(container, people, size, maxVisible) {
+  maxVisible = maxVisible || 3;
+  container.innerHTML = '';
+  container.classList.add('person-badge-row');
+  const list = people || [];
+  if (!list.length) {
+    container.appendChild(personBadge(null, size));
+    return;
+  }
+  for (const name of list.slice(0, maxVisible)) container.appendChild(personBadge(name, size));
+  if (list.length > maxVisible) {
+    const more = document.createElement('div');
+    more.className = 'person-badge-more';
+    more.textContent = '+' + (list.length - maxVisible);
+    container.appendChild(more);
+  }
+}
+
+function populatePersonSelect() {
+  renderPersonChips('ae-person-chips', aePeople);
+}
+
+function populateFeedPersonSelect() {
+  const sel = document.getElementById('cf-person');
+  sel.innerHTML = '';
+  if (!appConfig || !appConfig.colors) return;
+  for (const [name] of Object.entries(appConfig.colors)) {
+    if (['default', 'Birthday', 'Anniversary', 'Holiday'].includes(name)) continue;
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = withEmoji(name);
+    sel.appendChild(opt);
+  }
+  const newOpt = document.createElement('option');
+  newOpt.value = '__new__';
+  newOpt.textContent = 'New person...';
+  sel.appendChild(newOpt);
+}
+
+function openFeedForm() {
+  populateFeedPersonSelect();
+  document.getElementById('cf-url').value = '';
+  document.getElementById('cf-name').value = '';
+  document.getElementById('cf-icon').value = '';
+  document.getElementById('cf-new-name').value = '';
+  document.getElementById('cf-new-color').value = '#4682B4';
+  document.getElementById('cf-new-fields').style.display = 'none';
+  document.getElementById('cf-submit').disabled = false;
+  document.getElementById('cf-submit').textContent = 'Add Feed';
+  document.getElementById('feed-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('cf-url').focus(), 50);
+}
+
+function closeFeedForm() {
+  document.getElementById('feed-overlay').classList.remove('open');
+}
+
+function showEventDetail(ev) {
+  detailEv = ev;
+  document.getElementById('detail-title').textContent = ev.title;
+
+  const allDay = ev.allDay === true || ev.allDay === 'true';
+  let meta;
+  if (allDay) {
+    // Date-only strings parse as UTC; reparse as local to avoid off-by-one in western timezones.
+    const localDate = new Date((ev.start || '').slice(0, 10) + 'T00:00:00');
+    meta = localDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  } else {
+    const start = new Date(ev.start);
+    const datePart = start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    meta = `${datePart} · ${formatTimeRange(ev.start, ev.end)}`;
+  }
+  document.getElementById('detail-meta').textContent = meta;
+  const canEdit = authed && !ev.feedId;
+  document.getElementById('detail-edit').style.display = canEdit ? 'block' : 'none';
+  const personSpan = document.getElementById('detail-person');
+  const personChips = document.getElementById('detail-person-chips');
+  renderPersonBadgeRow(document.getElementById('detail-dot'), ev.people, 24);
+
+  if (canEdit) {
+    personSpan.style.display = 'none';
+    personChips.style.display = '';
+    detailPeople = Array.isArray(ev.people) ? [...ev.people] : [];
+    const uid = ev.uid;
+    renderPersonChips('detail-person-chips', detailPeople, undefined, async people => {
+      try {
+        const res = await apiFetch(`/api/events/${encodeURIComponent(uid)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ people }),
+        });
+        if (!res.ok) throw new Error('failed');
+        renderPersonBadgeRow(document.getElementById('detail-dot'), people, 24);
+        await loadEvents();
+        render();
+      } catch (err) {
+        alert('Could not update people.');
+      }
+    });
+  } else {
+    personSpan.style.display = '';
+    personSpan.textContent = (ev.people && ev.people.length) ? ev.people.map(withEmoji).join(', ') : '';
+    personChips.style.display = 'none';
+  }
+
+  const locationDiv = document.getElementById('detail-location');
+  if (ev.location) {
+    locationDiv.textContent = '📍 ' + ev.location;
+    locationDiv.style.display = '';
+  } else {
+    locationDiv.style.display = 'none';
+  }
+
+  const deleteBtn = document.getElementById('detail-delete');
+  const deleteRecurringDiv = document.getElementById('detail-delete-recurring');
+  const canDelete = canEdit;
+
+  if (canDelete && ev.hasSeries) {
+    deleteBtn.style.display = 'none';
+    deleteRecurringDiv.style.display = 'flex';
+    const delOne = document.getElementById('detail-delete-one');
+    const delAll = document.getElementById('detail-delete-all');
+    delOne.dataset.uid = ev.uid || '';
+    delOne.dataset.start = ev.start;
+    delOne.disabled = false;
+    delOne.textContent = 'Delete This Only';
+    delAll.dataset.uid = ev.uid || '';
+    delAll.disabled = false;
+    delAll.textContent = 'Delete All';
+  } else {
+    deleteBtn.style.display = canDelete ? 'block' : 'none';
+    deleteRecurringDiv.style.display = 'none';
+    deleteBtn.dataset.uid = ev.uid || '';
+    deleteBtn.disabled = false;
+    deleteBtn.textContent = 'Delete Event';
+  }
+
+  document.getElementById('detail-overlay').classList.add('open');
+}
+
+function closeDetailPopup() {
+  document.getElementById('detail-overlay').classList.remove('open');
+}
+
+// ── Custom recurrence (RRULE builder) ──────────────────────────────────────
+// The "Custom…" repeat option builds an RFC5545 RRULE (FREQ/INTERVAL/BYDAY);
+// the series end still lives in the separate "Ends on" field, never in the
+// rule's UNTIL — the server (expandRruleRecurring) honors both, so keeping the
+// end date in one place unifies simple, custom, and imported events.
+const RRULE_DAYS = ['SU','MO','TU','WE','TH','FR','SA']; // index = JS getDay()
+const RRULE_DAY_LABELS = ['S','M','T','W','T','F','S'];
+const RRULE_DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const UNIT_FREQ = { day:'DAILY', week:'WEEKLY', month:'MONTHLY', year:'YEARLY' };
+const FREQ_UNIT = { DAILY:'day', WEEKLY:'week', MONTHLY:'month', YEARLY:'year' };
+const RRULE_DAY_SHORT = { SU:'Sun', MO:'Mon', TU:'Tue', WE:'Wed', TH:'Thu', FR:'Fri', SA:'Sat' };
+
+// Parse an RRULE value (no "RRULE:" prefix) into the fields the custom builder
+// can represent. Returns null when the rule uses anything the checkbox/interval
+// UI can't safely round-trip (BYMONTHDAY, BYSETPOS, positional BYDAY like 2MO,
+// COUNT, or a non-default WKST on an interval>1 rule) — the caller then shows
+// the pattern read-only rather than silently rewriting (and corrupting) it.
+function parseSimpleRrule(str) {
+  if (!str) return null;
+  const parts = {};
+  for (const seg of String(str).split(';')) {
+    const i = seg.indexOf('=');
+    if (i > 0) parts[seg.slice(0, i).toUpperCase()] = seg.slice(i + 1);
+  }
+  const freq = (parts.FREQ || '').toUpperCase();
+  if (!FREQ_UNIT[freq]) return null;
+  const allowed = new Set(['FREQ','INTERVAL','BYDAY','UNTIL','WKST']);
+  for (const k of Object.keys(parts)) if (!allowed.has(k)) return null;
+  const interval = parts.INTERVAL ? parseInt(parts.INTERVAL, 10) : 1;
+  if (!(interval >= 1)) return null;
+  if (interval > 1 && parts.WKST && parts.WKST.toUpperCase() !== 'MO') return null;
+  let byday = [];
+  if (parts.BYDAY) {
+    byday = parts.BYDAY.split(',').map(d => d.trim().toUpperCase());
+    if (byday.some(d => !RRULE_DAYS.includes(d))) return null; // positional (e.g. 2MO)
+  }
+  let untilDate = null;
+  if (parts.UNTIL) {
+    const m = /^(\d{4})(\d{2})(\d{2})/.exec(parts.UNTIL);
+    if (m) untilDate = `${m[1]}-${m[2]}-${m[3]}`;
+  }
+  return { unit: FREQ_UNIT[freq], interval, byday, untilDate };
+}
+
+// Best-effort human summary for a pattern we won't let the user edit inline.
+function summarizeRrule(str) {
+  const parts = {};
+  for (const seg of String(str).split(';')) {
+    const i = seg.indexOf('=');
+    if (i > 0) parts[seg.slice(0, i).toUpperCase()] = seg.slice(i + 1);
+  }
+  const base = { DAILY:'day', WEEKLY:'week', MONTHLY:'month', YEARLY:'year' }[(parts.FREQ||'').toUpperCase()] || 'period';
+  const n = parts.INTERVAL ? parseInt(parts.INTERVAL, 10) : 1;
+  let s = n > 1 ? `every ${n} ${base}s` : `every ${base}`;
+  if (parts.BYDAY) {
+    const names = parts.BYDAY.split(',').map(d => RRULE_DAY_SHORT[d.replace(/^[0-9+-]+/, '').toUpperCase()] || d);
+    s += ' on ' + names.join(', ');
+  }
+  if (parts.BYMONTHDAY) s += ` (day ${parts.BYMONTHDAY} of the month)`;
+  return s;
+}
+
+// Build an RRULE value from the custom-form fields (end date excluded — it
+// lives in ae-ends-on). Weekly with no day checked falls back to the anchor
+// date's weekday so the rule is always valid.
+function buildSimpleRrule() {
+  const unit = document.getElementById('ae-custom-unit').value;
+  const freq = UNIT_FREQ[unit] || 'WEEKLY';
+  let n = parseInt(document.getElementById('ae-custom-interval').value, 10);
+  if (!(n >= 1)) n = 1;
+  let rule = `FREQ=${freq}`;
+  if (n > 1) rule += `;INTERVAL=${n}`;
+  if (unit === 'week') {
+    let days = [...document.querySelectorAll('#ae-weekday-chips .ae-weekday-chip.on')].map(b => b.dataset.day);
+    if (!days.length) {
+      const dv = document.getElementById('ae-date').value;
+      const d = dv ? new Date(dv + 'T00:00:00') : null;
+      if (d && !isNaN(d.getTime())) days = [RRULE_DAYS[d.getDay()]];
+    }
+    if (days.length) rule += `;BYDAY=${days.join(',')}`;
+  }
+  return rule;
+}
+
+function renderWeekdayChips(selected) {
+  const wrap = document.getElementById('ae-weekday-chips');
+  wrap.innerHTML = '';
+  const sel = new Set(selected || []);
+  for (let i = 0; i < 7; i++) {
+    const code = RRULE_DAYS[i];
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ae-weekday-chip' + (sel.has(code) ? ' on' : '');
+    b.dataset.day = code;
+    b.textContent = RRULE_DAY_LABELS[i];
+    b.setAttribute('aria-label', RRULE_DAY_NAMES[i]);
+    b.addEventListener('click', () => b.classList.toggle('on'));
+    wrap.appendChild(b);
+  }
+}
+
+// Show/hide the custom builder + ends-on based on the repeat dropdown.
+function updateRepeatUI() {
+  const v = document.getElementById('ae-repeat').value;
+  document.getElementById('ae-custom-row').style.display = v === 'custom' ? '' : 'none';
+  document.getElementById('ae-ends-row').style.display = v !== 'none' ? '' : 'none';
+  if (v === 'custom') updateCustomUnitUI();
+}
+function updateCustomUnitUI() {
+  const unit = document.getElementById('ae-custom-unit').value;
+  document.getElementById('ae-weekday-row').style.display = unit === 'week' ? '' : 'none';
+}
+
+// Keep the "Monthly on the Nth weekday" option label in sync with the picked date
+// (e.g. "Monthly on the 3rd Friday" / "Monthly on the last Friday"). Mirrors the
+// server's dowOrdinal logic so the label matches what actually gets generated.
+function refreshDowOption() {
+  const opt = document.getElementById('ae-repeat-dow');
+  const dv = document.getElementById('ae-date').value;
+  if (!opt || !dv) return;
+  const d = new Date(dv + 'T00:00:00');
+  if (isNaN(d.getTime())) return;
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  const isLast = d.getDate() + 7 > daysInMonth;
+  const ord = isLast ? 'last' : ['1st', '2nd', '3rd', '4th'][Math.ceil(d.getDate() / 7) - 1];
+  opt.textContent = `Monthly on the ${ord} ${days[d.getDay()]}`;
+}
+
+function openAddForm(dateStr) {
+  editMode = null;
+  document.getElementById('ae-heading').textContent = 'Add Event';
+  document.getElementById('ae-repeat-row').style.display = '';
+  document.getElementById('ae-submit').style.display = '';
+  document.getElementById('ae-save-one').style.display = 'none';
+  document.getElementById('ae-save-all').style.display = 'none';
+  document.getElementById('ae-title').value = '';
+  document.getElementById('ae-date').value = dateStr || toDateInputValue(new Date());
+  refreshDowOption();
+  document.getElementById('ae-allday').checked = false;
+  document.getElementById('ae-start').value = '';
+  document.getElementById('ae-end').value = '';
+  document.getElementById('ae-times').style.display = '';
+  document.getElementById('ae-repeat-row').style.display = '';
+  document.getElementById('ae-repeat').value = 'none';
+  document.getElementById('ae-ends-on').value = '';
+  document.getElementById('ae-custom-interval').value = '1';
+  document.getElementById('ae-custom-unit').value = 'week';
+  renderWeekdayChips([]);
+  updateRepeatUI();
+  document.getElementById('ae-repeat-hint').style.display = 'none';
+  document.getElementById('ae-repeat-locked').style.display = 'none';
+  document.getElementById('ae-location').value = '';
+  document.getElementById('ae-share').value = 'auto';
+  updateShareHint();
+  document.getElementById('ae-submit').disabled = false;
+  document.getElementById('ae-submit').textContent = 'Add Event';
+  aePeople = (appConfig && appConfig.colors && appConfig.colors.Family) ? ['Family'] : [];
+  populatePersonSelect();
+  document.getElementById('add-overlay').classList.add('open');
+  document.getElementById('add-modal').scrollTop = 0;
+  setTimeout(() => document.getElementById('ae-title').focus(), 50);
+}
+
+function closeAddForm() {
+  document.getElementById('add-overlay').classList.remove('open');
+}
+
+function openEditForm(ev) {
+  // hasSeries (not the legacy `recurring` string) gates the one/all scope
+  // choice — an imported RRULE series has recurring=null but is still a
+  // series; checking `recurring` alone here would silently offer only the
+  // whole-series edit/delete path for an imported recurring event.
+  editMode = { uid: ev.uid, recurring: !!ev.hasSeries, instanceStart: ev.start };
+  const allDay = ev.allDay === true || ev.allDay === 'true';
+
+  document.getElementById('ae-heading').textContent = 'Edit Event';
+  document.getElementById('ae-title').value = ev.title || '';
+  document.getElementById('ae-allday').checked = allDay;
+  document.getElementById('ae-times').style.display = allDay ? 'none' : '';
+  if (allDay) {
+    document.getElementById('ae-date').value = (ev.start || '').slice(0, 10);
+    document.getElementById('ae-start').value = '';
+    document.getElementById('ae-end').value = '';
+  } else {
+    const sp = tzParts(ev.start);
+    document.getElementById('ae-date').value = sp.date;
+    document.getElementById('ae-start').value = sp.time;
+    // Start-only events (no original end) come back with end === start; leave End blank.
+    document.getElementById('ae-end').value = (ev.end && ev.end !== ev.start) ? tzParts(ev.end).time : '';
+  }
+  document.getElementById('ae-location').value = ev.location || '';
+  aePeople = Array.isArray(ev.people) ? [...ev.people] : [];
+  populatePersonSelect();
+
+  // Recurrence: an event carries EITHER a legacy `recurring` string OR an
+  // imported/custom `rrule`. Populate whichever applies. A simple RRULE maps
+  // back into the custom builder; an RRULE too complex for the builder is shown
+  // read-only so a whole-series save can't silently rewrite (and corrupt) it.
+  // For an existing series the pattern only takes effect via "All Events"; "This
+  // Event" always detaches a single standalone occurrence server-side.
+  const repeatSel = document.getElementById('ae-repeat');
+  refreshDowOption();
+  document.getElementById('ae-repeat-row').style.display = '';
+  document.getElementById('ae-repeat-locked').style.display = 'none';
+  document.getElementById('ae-custom-interval').value = '1';
+  document.getElementById('ae-custom-unit').value = 'week';
+  editMode.patternLocked = false;
+
+  const dv = document.getElementById('ae-date').value;
+  const anchorD = dv ? new Date(dv + 'T00:00:00') : null;
+  const anchorDay = (anchorD && !isNaN(anchorD.getTime())) ? [RRULE_DAYS[anchorD.getDay()]] : [];
+
+  if (ev.rrule) {
+    const parsed = parseSimpleRrule(ev.rrule);
+    if (parsed) {
+      repeatSel.value = 'custom';
+      document.getElementById('ae-custom-unit').value = parsed.unit;
+      document.getElementById('ae-custom-interval').value = String(parsed.interval || 1);
+      renderWeekdayChips(parsed.byday.length ? parsed.byday : (parsed.unit === 'week' ? anchorDay : []));
+      // A UNTIL baked into an imported rule surfaces in the unified Ends-on field.
+      document.getElementById('ae-ends-on').value = parsed.untilDate || (ev.endsOn ? String(ev.endsOn).slice(0, 10) : '');
+      updateRepeatUI();
+    } else {
+      // Complex imported pattern — lock the editor and preserve it untouched on save.
+      editMode.patternLocked = true;
+      repeatSel.value = 'none';
+      renderWeekdayChips(anchorDay);
+      document.getElementById('ae-repeat-row').style.display = 'none';
+      document.getElementById('ae-custom-row').style.display = 'none';
+      document.getElementById('ae-ends-row').style.display = 'none';
+      const note = document.getElementById('ae-repeat-locked');
+      note.textContent = `Repeats ${summarizeRrule(ev.rrule)}. Editing this repeat pattern isn't supported yet — you can still change the title, time, person, or location, or delete this event.`;
+      note.style.display = '';
+    }
+  } else {
+    repeatSel.value = ev.recurring || 'none';
+    renderWeekdayChips(anchorDay);
+    document.getElementById('ae-ends-on').value = ev.endsOn ? String(ev.endsOn).slice(0, 10) : '';
+    updateRepeatUI();
+  }
+  document.getElementById('ae-repeat-hint').style.display =
+    (editMode.recurring && !editMode.patternLocked) ? '' : 'none';
+
+  document.getElementById('ae-share').value =
+    (ev.shareOverride === 'always' || ev.shareOverride === 'never') ? ev.shareOverride : 'auto';
+  updateShareHint();
+
+  const submit = document.getElementById('ae-submit');
+  const one = document.getElementById('ae-save-one');
+  const all = document.getElementById('ae-save-all');
+  if (editMode.recurring) {
+    submit.style.display = 'none';
+    one.style.display = ''; one.disabled = false; one.textContent = 'This Event';
+    all.style.display = ''; all.disabled = false; all.textContent = 'All Events';
+  } else {
+    submit.style.display = ''; submit.disabled = false; submit.textContent = 'Save';
+    one.style.display = 'none';
+    all.style.display = 'none';
+  }
+
+  document.getElementById('add-overlay').classList.add('open');
+  document.getElementById('add-modal').scrollTop = 0;
+  setTimeout(() => document.getElementById('ae-title').focus(), 50);
+}
+
+// Live hint under the Sharing select: for "Auto", say whether the current title
+// matches a share word (so you can see it'll be shared before saving).
+function updateShareHint() {
+  const hint = document.getElementById('ae-share-hint');
+  const val = document.getElementById('ae-share').value;
+  const kws = (appConfig && appConfig.shareKeywords) || [];
+  if (val === 'always') { hint.textContent = 'Shown on your view-only share links.'; return; }
+  if (val === 'never')  { hint.textContent = 'Hidden from all share links, even if the title matches a share word.'; return; }
+  if (!kws.length) { hint.textContent = 'No share words set yet — nothing is shared. Add words in Settings → Share.'; return; }
+  const title = (document.getElementById('ae-title').value || '').toLowerCase();
+  const hit = kws.find(k => title.includes(String(k).toLowerCase()));
+  hint.textContent = hit
+    ? `Will be shared (title matches "${hit}").`
+    : `Won't be shared (title matches none of: ${kws.join(', ')}).`;
+}
+
+function aeData() {
+  const shareVal = document.getElementById('ae-share').value;
+  return {
+    title: document.getElementById('ae-title').value.trim(),
+    date: document.getElementById('ae-date').value,
+    allDay: document.getElementById('ae-allday').checked,
+    startTime: document.getElementById('ae-start').value,
+    endTime: document.getElementById('ae-end').value,
+    people: [...aePeople],
+    location: document.getElementById('ae-location').value.trim() || null,
+    shareOverride: shareVal === 'auto' ? null : shareVal
+  };
+}
+
+// scope: undefined = create (add) or whole-event save; 'one' = this occurrence; 'all' = series.
+async function doSave(scope) {
+  const d = aeData();
+  if (!d.title || !d.date) { alert('Title and date are required.'); return; }
+  const submit = document.getElementById('ae-submit');
+  const one = document.getElementById('ae-save-one');
+  const all = document.getElementById('ae-save-all');
+  const active = !editMode ? submit : (scope === 'one' ? one : scope === 'all' ? all : submit);
+  const prevLabel = active.textContent;
+  [submit, one, all].forEach(b => b.disabled = true);
+  active.textContent = editMode ? 'Saving…' : 'Adding…';
+  try {
+    let res;
+    // Repeat/ends-on apply to the whole series — omitted when detaching a single
+    // occurrence (scope 'one'), where the server always forces a standalone,
+    // non-recurring copy regardless of what's selected in the form.
+    if (scope !== 'one') {
+      if (editMode && editMode.patternLocked) {
+        // Imported complex recurrence — send no recurrence fields at all so a
+        // title/time/person edit can't rewrite (and corrupt) the pattern.
+      } else {
+        const repeatVal = document.getElementById('ae-repeat').value;
+        const endsOn = document.getElementById('ae-ends-on').value;
+        // recurring and rrule are mutually exclusive; always send both (one
+        // null) so switching between a simple rule, a custom rule, and "none"
+        // clears whichever field no longer applies.
+        if (repeatVal === 'custom') {
+          d.rrule = buildSimpleRrule();
+          d.repeat = null;
+          d.endsOn = endsOn || null;
+        } else if (repeatVal === 'none') {
+          d.repeat = null;
+          d.rrule = null;
+          d.endsOn = null;
+        } else {
+          d.repeat = repeatVal;
+          d.rrule = null;
+          d.endsOn = endsOn || null;
+        }
+      }
+    }
+    if (!editMode) {
+      // deviceId lets the server skip push-notifying the very device that
+      // created this event (see server/notify.js notifyEventAdded).
+      res = await apiFetch('/api/events', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...d, deviceId: kbDeviceId() })
+      });
+    } else {
+      const qs = scope === 'one' ? `?instanceStart=${encodeURIComponent(editMode.instanceStart)}` : '';
+      res = await apiFetch(`/api/events/${encodeURIComponent(editMode.uid)}${qs}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(d)
+      });
+    }
+    if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || `Server error ${res.status}`); }
+    await loadEvents();
+    render();
+    closeAddForm();
+  } catch (err) {
+    alert((editMode ? 'Could not save changes: ' : 'Could not add event: ') + err.message);
+  } finally {
+    [submit, one, all].forEach(b => b.disabled = false);
+    active.textContent = prevLabel;
+  }
+}
+
+async function loadConfig() {
+  const res = await fetch('/api/config', { credentials: 'same-origin' });
+  if (res.status === 401 || res.status === 403) return false;
+  appConfig = await res.json();
+  authed = !!appConfig.authed;
+  document.title = appConfig.name || 'Kinboard';
+  // Not logged in (only reachable at all when the calendar is public) → hide
+  // write controls and show the sign-in banner. The API enforces this
+  // server-side too; this just keeps the UI honest.
+  document.body.classList.toggle('read-only', !authed);
+  // A locally-chosen theme (via the 🎨 button) overrides the household default.
+  applyTheme(localStorage.getItem('theme') || appConfig.theme);
+  return true;
+}
+
+const THEME_ORDER = ['light', 'dark', 'glitter', 'sports', 'beach', 'forest', 'mountains'];
+const LIGHT_UI = new Set(['light', 'glitter', 'beach', 'mountains']);
+let currentTheme = 'dark';
+
+function applyTheme(name) {
+  if (!THEME_ORDER.includes(name)) name = 'dark';
+  currentTheme = name;
+  document.body.dataset.theme = name;
+  document.body.classList.toggle('light-ui', LIGHT_UI.has(name));
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) {
+    const bg = getComputedStyle(document.body).getPropertyValue('--bg').trim();
+    if (bg) meta.setAttribute('content', bg);
+  }
+  // Managed decoration overlay (glitter + sports get extra visual FX)
+  const FX_THEMES = new Set(['glitter','sports']);
+  let fx = document.getElementById('theme-fx');
+  if (FX_THEMES.has(name)) {
+    if (!fx) {
+      fx = document.createElement('div');
+      fx.id = 'theme-fx';
+      document.body.prepend(fx);
+    }
+    fx.className = name;
+  } else if (fx) {
+    fx.remove();
+  }
+  localStorage.setItem('theme', name);
+}
+
+async function loadEvents() {
+  const res = await fetch('/api/events', { credentials: 'same-origin' });
+  if (!res.ok) return;
+  const data = await res.json();
+  const CATEGORY_ICON = { birthday: '🎂', anniversary: '❤️', holiday: '🎉', family: '🏠' };
+  events = (data.events || []).map(ev => ({
+    ...ev,
+    icon: ev.icon || (ev.category && CATEGORY_ICON[ev.category]) || '',
+  }));
+}
+
+function startOfDay(d) {
+  const x = new Date(d);
+  x.setHours(0,0,0,0);
+  return x;
+}
+
+function addDays(d, n) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+
+function sameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() &&
+         a.getMonth() === b.getMonth() &&
+         a.getDate() === b.getDate();
+}
+
+// Build a rolling grid: today's week is row 1 (viewOffset=0), or anchor to
+// the 1st of the offset month when navigating.
+function buildGridDates() {
+  const firstDOW = (appConfig && appConfig.firstDayOfWeek) || 0;
+  const isMobile = Math.min(window.innerWidth, window.innerHeight) <= 900;
+  const configWeeks = isMobile ? 4 : ((appConfig && appConfig.weeksToShow) || 6);
+
+  let anchor, weeks;
+  if (todayView) {
+    // "Today" view: rolling window of configWeeks starting from today's week.
+    anchor = startOfDay(new Date());
+    weeks = configWeeks;
+  } else {
+    // Navigated month: anchor to the 1st and show however many weeks the whole
+    // month spans (4–6) so the end of the month is never cut off — the
+    // weeks-to-show setting only governs the rolling "Today" view.
+    const now = new Date();
+    anchor = startOfDay(new Date(now.getFullYear(), now.getMonth() + viewOffset, 1));
+    const daysInMonth = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate();
+    let lead = anchor.getDay() - firstDOW;
+    if (lead < 0) lead += 7;
+    weeks = Math.ceil((lead + daysInMonth) / 7);
+  }
+
+  const anchorDOW = anchor.getDay();
+  let backOffset = anchorDOW - firstDOW;
+  if (backOffset < 0) backOffset += 7;
+
+  const gridStart = addDays(anchor, -backOffset);
+  const dates = [];
+  for (let i = 0; i < weeks * 7; i++) {
+    dates.push(addDays(gridStart, i));
+  }
+  return dates;
+}
+
+function eventsForDay(date) {
+  const dayStart = startOfDay(date);
+  const dayEnd = addDays(dayStart, 1);
+
+  return events.filter(ev => {
+    if (activeFilter && !(ev.people || []).includes(activeFilter)) return false;
+    // Every event producer (DB rows, iCal feeds, holidays) emits all-day
+    // start/end as local-midnight strings with "T00:00:00" already included
+    // (no trailing Z) — new Date() parses that as local time directly. Do NOT
+    // append another "T00:00:00" here: a source that already includes it
+    // (feeds/holidays) would double up into an unparseable string and the
+    // event would silently vanish from every day (this happened before).
+    const evStart = new Date(ev.start);
+    const evEnd   = new Date(ev.end);
+    // Event overlaps this day if it starts before dayEnd and ends after dayStart
+    return evStart < dayEnd && evEnd > dayStart;
+  }).sort((a, b) => {
+    // All-day first, then alphabetical by assigned people, then by start time
+    if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
+    const aPeople = (a.people || []).join(', ');
+    const bPeople = (b.people || []).join(', ');
+    if (aPeople !== bPeople) return aPeople.localeCompare(bPeople);
+    return new Date(a.start) - new Date(b.start);
+  });
+}
+
+function formatTime(dateStr) {
+  const d = new Date(dateStr);
+  const tz = (appConfig && appConfig.timeZone) || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz
+  }).formatToParts(d);
+  const h = parts.find(p => p.type === 'hour').value;
+  const m = parts.find(p => p.type === 'minute').value;
+  const ampm = parts.find(p => p.type === 'dayPeriod').value.toUpperCase();
+  return m === '00' ? `${h}${ampm}` : `${h}:${m}${ampm}`;
+}
+
+function formatTimeRange(startStr, endStr) {
+  const start = formatTime(startStr);
+  const end = formatTime(endStr);
+  if (startStr === endStr || start === end) return start;
+  return `${start}-${end}`;
+}
+
+const FILTER_SKIP = new Set(['default']);
+
+function buildFilterBar() {
+  const bar = document.getElementById('filter-bar');
+  bar.innerHTML = '';
+  if (!appConfig || !appConfig.colors) return;
+  Object.entries(appConfig.colors).forEach(([person, color]) => {
+    if (FILTER_SKIP.has(person)) return;
+    const chip = document.createElement('button');
+    chip.className = 'filter-chip';
+    chip.dataset.person = person;
+    chip.textContent = withEmoji(person);
+    chip.style.setProperty('--chip-color', color);
+    chip.addEventListener('click', () => {
+      activeFilter = activeFilter === person ? null : person;
+      document.querySelectorAll('.filter-chip').forEach(c =>
+        c.classList.toggle('active', c.dataset.person === activeFilter)
+      );
+      render();
+    });
+    bar.appendChild(chip);
+  });
+}
+
+function render() {
+  if (viewMode === 'agenda') { renderAgenda(); } else { renderGrid(); }
+}
+
+function renderGrid() {
+  document.getElementById('agenda-container').style.display = 'none';
+  const grid = document.getElementById('grid');
+  grid.style.display = '';
+  document.getElementById('prev-month').style.visibility = '';
+  document.getElementById('next-month').style.visibility = '';
+  document.getElementById('today-btn').style.display = todayView ? 'none' : 'block';
+
+  const today = startOfDay(new Date());
+  const dates = buildGridDates();
+  grid.innerHTML = '';
+
+  // Month label: today's month when at viewOffset=0, otherwise the navigated month
+  const labelDate = todayView
+    ? today
+    : new Date(today.getFullYear(), today.getMonth() + viewOffset, 1);
+  const labelOpts = labelDate.getFullYear() === today.getFullYear()
+    ? { month: 'long' }
+    : { month: 'long', year: 'numeric' };
+  document.getElementById('month-label').textContent =
+    labelDate.toLocaleString('en-US', labelOpts);
+
+  // "other-month" dimming relative to the displayed month
+  const displayMonth = labelDate.getMonth();
+  const displayYear = labelDate.getFullYear();
+
+  // Day-of-week header row
+  const firstDOW = (appConfig && appConfig.firstDayOfWeek) || 0;
+  for (let i = 0; i < 7; i++) {
+    const dow = (firstDOW + i) % 7;
+    const el = document.createElement('div');
+    el.className = 'day-header';
+    el.textContent = DAY_NAMES[dow];
+    grid.appendChild(el);
+  }
+
+  // Day cells
+  for (const date of dates) {
+    const dateKey = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+
+    const cell = document.createElement('div');
+    cell.className = 'day-cell';
+    cell.dataset.date = dateKey;
+    if (sameDay(date, today)) cell.classList.add('today');
+    if (date.getMonth() !== displayMonth || date.getFullYear() !== displayYear) cell.classList.add('other-month');
+
+    const num = document.createElement('div');
+    num.className = 'day-number';
+
+    const wxSpan = document.createElement('span');
+    wxSpan.className = 'day-weather';
+    const dw = dailyWeather[dateKey];
+    if (dw) wxSpan.textContent = `${weatherEmoji(dw.code)} ${dw.high}°`;
+    num.appendChild(wxSpan);
+
+    const numSpan = document.createElement('span');
+    if (date.getDate() === 1) {
+      numSpan.textContent = date.toLocaleString('en-US', { month: 'short' }) + ' 1';
+    } else {
+      numSpan.textContent = String(date.getDate());
+    }
+    num.appendChild(numSpan);
+
+    cell.appendChild(num);
+
+    const evContainer = document.createElement('div');
+    evContainer.className = 'events';
+
+    const dayEvents = eventsForDay(date);
+    for (const ev of dayEvents) {
+      const evEl = document.createElement('div');
+      evEl.className = 'event' + (ev.allDay ? ' allday' : '');
+      evEl.dataset.uid = ev.uid || '';
+      evEl.dataset.feedId = ev.feedId || '';
+      evEl.dataset.start = ev.start || '';
+      evEl.title = ev.title;
+
+      const badgeRow = document.createElement('div');
+      renderPersonBadgeRow(badgeRow, ev.people, 18, 3);
+      evEl.appendChild(badgeRow);
+
+      const textSpan = document.createElement('span');
+      textSpan.className = 'event-text';
+      if (ev.allDay) {
+        textSpan.textContent = ev.icon ? `${ev.icon} ${ev.title}` : ev.title;
+      } else if (ev.compact) {
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'time';
+        timeSpan.textContent = formatTime(ev.start);
+        textSpan.appendChild(timeSpan);
+        if (ev.icon) textSpan.appendChild(document.createTextNode(' ' + ev.icon));
+      } else {
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'time';
+        // Start time only in the grid — it's the "be there by" signal. The full
+        // range shows in the detail popup on click.
+        timeSpan.textContent = formatTime(ev.start);
+        textSpan.appendChild(timeSpan);
+        if (ev.icon) {
+          textSpan.appendChild(document.createTextNode(' ' + ev.icon));
+        } else {
+          textSpan.appendChild(document.createTextNode(ev.title));
+        }
+      }
+      evEl.appendChild(textSpan);
+      evContainer.appendChild(evEl);
+    }
+
+    cell.appendChild(evContainer);
+    grid.appendChild(cell);
+  }
+
+  // Row count follows whatever buildGridDates() produced (rolling window for the
+  // Today view, full-month span when navigating) so the two never disagree.
+  const weeks = dates.length / 7;
+  grid.style.gridTemplateRows = `auto repeat(${weeks}, minmax(min-content, 1fr))`;
+}
+
+function renderAgenda() {
+  const grid = document.getElementById('grid');
+  const container = document.getElementById('agenda-container');
+  grid.style.display = 'none';
+  container.style.display = 'block';
+  container.innerHTML = '';
+
+  document.getElementById('prev-month').style.visibility = 'hidden';
+  document.getElementById('next-month').style.visibility = 'hidden';
+  document.getElementById('today-btn').style.display = 'none';
+  document.getElementById('month-label').textContent = 'Upcoming';
+
+  const today = startOfDay(new Date());
+  let hasAnyEvents = false;
+
+  for (let i = 0; i < 60; i++) {
+    const date = addDays(today, i);
+    // eventsForDay sorts by person-then-time (grouped) for the grid cells;
+    // agenda reads as a chronological timeline, so re-sort to pure time order
+    // (all-day still floats to the top of the day).
+    const dayEvents = eventsForDay(date).slice().sort((a, b) => {
+      if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
+      return new Date(a.start) - new Date(b.start);
+    });
+    if (!dayEvents.length) continue;
+
+    hasAnyEvents = true;
+    const section = document.createElement('div');
+    section.className = 'agenda-day-section';
+
+    const header = document.createElement('div');
+    const isToday = sameDay(date, today);
+    header.className = 'agenda-date-header' + (isToday ? ' today-header' : '');
+    const label = date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    header.textContent = isToday ? `Today  ·  ${label}` : label;
+    section.appendChild(header);
+
+    for (const ev of dayEvents) {
+      const row = document.createElement('div');
+      row.className = 'agenda-event-row';
+      row.style.cursor = 'pointer';
+
+      const dot = document.createElement('div');
+      dot.className = 'agenda-dot';
+      renderPersonBadgeRow(dot, ev.people, 24);
+
+      const timeDiv = document.createElement('div');
+      timeDiv.className = 'agenda-time';
+      timeDiv.textContent = ev.allDay ? 'All day' : formatTime(ev.start);
+
+      const titleDiv = document.createElement('div');
+      titleDiv.className = 'agenda-title';
+      titleDiv.textContent = ev.icon ? `${ev.icon} ${ev.title}` : ev.title;
+
+      row.appendChild(dot);
+      row.appendChild(timeDiv);
+      row.appendChild(titleDiv);
+
+      if (ev.people && ev.people.length) {
+        const personDiv = document.createElement('div');
+        personDiv.className = 'agenda-person';
+        personDiv.textContent = ev.people.map(withEmoji).join(', ');
+        row.appendChild(personDiv);
+      }
+
+      row.addEventListener('click', () => showEventDetail(ev));
+      section.appendChild(row);
+    }
+
+    container.appendChild(section);
+  }
+
+  if (!hasAnyEvents) {
+    const empty = document.createElement('div');
+    empty.className = 'agenda-empty';
+    empty.textContent = 'No upcoming events in the next 60 days.';
+    container.appendChild(empty);
+  }
+}
+
+function weatherEmoji(code) {
+  if (code === 0) return '☀️';
+  if (code <= 3) return '⛅️';
+  if (code <= 48) return '🌫️';
+  if (code <= 67) return '🌧️';
+  if (code <= 77) return '🌨️';
+  if (code <= 86) return '🌦️';
+  return '⛈️';
+}
+
+async function fetchWeather() {
+  if (!appConfig || !appConfig.weather) return;
+  const { latitude, longitude, units } = appConfig.weather;
+  const tempUnit = (units === 'fahrenheit' || units === 'imperial') ? 'fahrenheit' : 'celsius';
+  const tz = encodeURIComponent((appConfig && appConfig.timeZone) || 'America/New_York');
+  try {
+    const res = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}` +
+      `&current=temperature_2m,weather_code&daily=temperature_2m_max,weather_code` +
+      `&temperature_unit=${tempUnit}&timezone=${tz}&forecast_days=14`
+    );
+    const data = await res.json();
+    if (data.current) {
+      weatherData = { temp: Math.round(data.current.temperature_2m), code: data.current.weather_code };
+    }
+    if (data.daily && data.daily.time) {
+      dailyWeather = {};
+      data.daily.time.forEach((dateStr, i) => {
+        dailyWeather[dateStr] = {
+          high: Math.round(data.daily.temperature_2m_max[i]),
+          code: data.daily.weather_code[i]
+        };
+      });
+    }
+    updateClock();
+    render();
+  } catch (_) {}
+}
+
+function updateClock() {
+  const now = new Date();
+  const opts = { weekday: 'long', hour: 'numeric', minute: '2-digit' };
+  let text = now.toLocaleString('en-US', opts);
+  if (weatherData) text += `  ·  ${weatherEmoji(weatherData.code)} ${weatherData.temp}°`;
+  document.getElementById('clock').textContent = text;
+}
+
+// ==== TAB SWITCHING ====
+let currentTab = 'calendar';
+
+function showTab(name) {
+  currentTab = name;
+  document.body.dataset.tab = name;
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === name);
+  });
+  if (name === 'meals') {
+    mealsWeekStart = startOfDay(new Date()); // always open on today, not wherever it was left
+    if (!mealsLoaded) { mealsLoaded = true; loadMeals().then(renderMealsList); }
+    else renderMealsList();
+  }
+  if (name === 'todos') {
+    populateTodoPersonSelect();
+    if (!todosLoaded) { todosLoaded = true; loadTodos().then(renderTodos); }
+    else renderTodos();
+  }
+}
+
+// ==== MEAL PLANNER ====
+const MEAL_SLOTS = [
+  { key: 'breakfast', label: 'Breakfast', icon: '🌅' },
+  { key: 'lunch',     label: 'Lunch',     icon: '☀️' },
+  { key: 'dinner',    label: 'Dinner',    icon: '🌙' },
+  { key: 'snack',     label: 'Snack',     icon: '🍎' },
+];
+// Categories that are event/feed tags, not real people — never valid meal/todo assignees.
+const NON_PERSON_NAMES = new Set(['default', 'Birthday', 'Anniversary', 'Holiday']);
+
+let meals = [];
+let mealsLoaded = false;
+let editingMealId = null;
+let mlPeople = []; // people currently selected in the meal form's chip row
+
+// Rolling 7-day window anchored on today by default (not the calendar week
+// start) — showTab() resets this to today every time the Meals tab opens;
+// prev/next shift it by a week from wherever the user navigated to.
+let mealsWeekStart = null;
+
+async function loadMeals() {
+  const res = await apiFetch('/api/meals');
+  if (!res.ok) return;
+  const data = await res.json();
+  meals = data.meals || [];
+}
+
+function populateMealPersonSelect() {
+  renderPersonChips('ml-person-chips', mlPeople, NON_PERSON_NAMES);
+}
+
+function renderMealsList() {
+  if (!mealsWeekStart) mealsWeekStart = startOfDay(new Date());
+  const list = document.getElementById('meals-list');
+  list.innerHTML = '';
+
+  const weekEnd = addDays(mealsWeekStart, 6);
+  document.getElementById('meals-week-label').textContent =
+    `${mealsWeekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ` +
+    `${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(mealsWeekStart, i);
+    const dateStr = toDateInputValue(d);
+    const isToday = sameDay(d, new Date());
+
+    const section = document.createElement('div');
+    section.className = 'meal-day-section';
+
+    const header = document.createElement('div');
+    header.className = 'meal-day-header' + (isToday ? ' today-header' : '');
+    header.textContent = isToday
+      ? `Today  ·  ${d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}`
+      : d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+    section.appendChild(header);
+
+    for (const slot of MEAL_SLOTS) {
+      const slotEl = document.createElement('div');
+      slotEl.className = 'meal-slot';
+
+      const slotHeader = document.createElement('div');
+      slotHeader.className = 'meal-slot-header';
+      const label = document.createElement('div');
+      label.className = 'meal-slot-label';
+      label.textContent = `${slot.icon} ${slot.label}`;
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'meal-slot-add';
+      addBtn.textContent = '+ Add';
+      addBtn.addEventListener('click', () => openMealForm(dateStr, slot.key));
+      slotHeader.appendChild(label);
+      slotHeader.appendChild(addBtn);
+      slotEl.appendChild(slotHeader);
+
+      for (const m of meals.filter(x => x.date === dateStr && x.meal_type === slot.key)) {
+        const row = document.createElement('div');
+        row.className = 'meal-item-row';
+        const dot = document.createElement('div');
+        dot.className = 'meal-item-dot';
+        renderPersonBadgeRow(dot, m.people, 24);
+        const title = document.createElement('div');
+        title.className = 'meal-item-title';
+        title.textContent = m.title;
+        row.appendChild(dot);
+        row.appendChild(title);
+        if (m.people && m.people.length) {
+          const person = document.createElement('div');
+          person.className = 'meal-item-person';
+          person.textContent = m.people.map(withEmoji).join(', ');
+          row.appendChild(person);
+        }
+        row.addEventListener('click', () => openMealForm(dateStr, slot.key, m));
+        slotEl.appendChild(row);
+      }
+
+      section.appendChild(slotEl);
+    }
+
+    list.appendChild(section);
+  }
+}
+
+function openMealForm(dateStr, mealType, meal) {
+  editingMealId = meal ? meal.id : null;
+  document.getElementById('meal-heading').textContent = meal ? 'Edit Meal' : 'Add Meal';
+  document.getElementById('ml-title').value = meal ? meal.title : '';
+  document.getElementById('ml-type').value = mealType;
+  document.getElementById('ml-date').value = dateStr;
+  mlPeople = (meal && Array.isArray(meal.people)) ? [...meal.people] : [];
+  populateMealPersonSelect();
+  document.getElementById('ml-delete').style.display = meal ? '' : 'none';
+  document.getElementById('ml-submit').textContent = meal ? 'Save' : 'Add Meal';
+  document.getElementById('meal-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('ml-title').focus(), 50);
+}
+
+function closeMealForm() {
+  document.getElementById('meal-overlay').classList.remove('open');
+  editingMealId = null;
+}
+
+async function saveMeal() {
+  const body = {
+    title: document.getElementById('ml-title').value.trim(),
+    mealType: document.getElementById('ml-type').value,
+    date: document.getElementById('ml-date').value,
+    people: [...mlPeople],
+  };
+  if (!body.title || !body.date) return;
+
+  const submitBtn = document.getElementById('ml-submit');
+  submitBtn.disabled = true;
+  try {
+    const res = editingMealId
+      ? await apiFetch(`/api/meals/${editingMealId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      : await apiFetch('/api/meals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!res.ok) { const err = await res.json().catch(() => ({})); alert(err.error || 'Could not save meal'); return; }
+    await loadMeals();
+    renderMealsList();
+    closeMealForm();
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+
+async function deleteMeal() {
+  if (!editingMealId) return;
+  if (!confirm('Delete this meal?')) return;
+  const res = await apiFetch(`/api/meals/${editingMealId}`, { method: 'DELETE' });
+  if (!res.ok) { alert('Could not delete meal'); return; }
+  await loadMeals();
+  renderMealsList();
+  closeMealForm();
+}
+
+// ==== TO-DO ====
+let todos = [];
+let todosLoaded = false;
+let todoAddPeople = []; // people currently selected in the to-do add-row's chip row
+let editingTodoId = null;
+let tdPeople = []; // people currently selected in the todo edit form's chip row
+
+function populateTodoPersonSelect() {
+  renderPersonChips('todo-add-person-chips', todoAddPeople, NON_PERSON_NAMES);
+}
+
+async function loadTodos() {
+  const res = await apiFetch('/api/todos');
+  if (!res.ok) return;
+  const data = await res.json();
+  todos = data.todos || [];
+}
+
+function renderTodos() {
+  const list = document.getElementById('todos-list');
+  list.innerHTML = '';
+  if (!todos.length) {
+    const empty = document.createElement('div');
+    empty.id = 'todos-empty';
+    empty.textContent = 'No to-dos yet — add one above.';
+    list.appendChild(empty);
+    return;
+  }
+  for (const t of todos) {
+    const row = document.createElement('div');
+    row.className = 'todo-row' + (t.done ? ' done' : '');
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = t.done;
+    checkbox.addEventListener('change', () => toggleTodo(t.id, checkbox.checked));
+    row.appendChild(checkbox);
+
+    if (t.people && t.people.length) {
+      const dot = document.createElement('div');
+      dot.className = 'todo-person-dot';
+      renderPersonBadgeRow(dot, t.people, 24);
+      row.appendChild(dot);
+    }
+
+    // Title sits directly after the badges, and the name list goes to its
+    // right — same order the agenda and meal rows use.
+    const title = document.createElement('div');
+    title.className = 'todo-title';
+    title.textContent = t.recurring ? `🔁 ${t.title}` : t.title;
+    title.title = t.recurring ? `Repeats ${t.recurring}` : '';
+    title.addEventListener('click', () => openTodoEditForm(t));
+    row.appendChild(title);
+
+    if (t.people && t.people.length) {
+      const name = document.createElement('div');
+      name.className = 'todo-person-name';
+      name.textContent = t.people.map(withEmoji).join(', ');
+      name.title = t.people.join(', ');   // full list on hover when truncated
+      row.appendChild(name);
+    }
+
+    if (t.due_date) {
+      const due = document.createElement('div');
+      due.className = 'todo-due';
+      due.textContent = new Date(t.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      row.appendChild(due);
+    }
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'todo-delete';
+    del.setAttribute('aria-label', 'Delete to-do');
+    del.textContent = '×';
+    del.addEventListener('click', () => deleteTodo(t.id));
+    row.appendChild(del);
+
+    list.appendChild(row);
+  }
+}
+
+async function toggleTodo(id, done) {
+  await apiFetch(`/api/todos/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ done }) });
+  await loadTodos();
+  renderTodos();
+}
+
+async function deleteTodo(id) {
+  if (!confirm('Delete this to-do?')) return;
+  const res = await apiFetch(`/api/todos/${id}`, { method: 'DELETE' });
+  if (!res.ok) return;
+  await loadTodos();
+  renderTodos();
+}
+
+function openTodoEditForm(todo) {
+  editingTodoId = todo.id;
+  document.getElementById('td-title').value = todo.title || '';
+  document.getElementById('td-due').value = todo.due_date || '';
+  document.getElementById('td-repeat').value = todo.recurring || '';
+  tdPeople = Array.isArray(todo.people) ? [...todo.people] : [];
+  renderPersonChips('td-person-chips', tdPeople, NON_PERSON_NAMES);
+  document.getElementById('todo-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('td-title').focus(), 50);
+}
+
+function closeTodoEditForm() {
+  document.getElementById('todo-overlay').classList.remove('open');
+  editingTodoId = null;
+}
+
+async function saveTodoEdit() {
+  const title = document.getElementById('td-title').value.trim();
+  if (!title) return;
+  const recurring = document.getElementById('td-repeat').value || null;
+  // A repeat pattern needs an anchor date to advance from — default to today
+  // rather than block saving, since picking a repeat is the clearer signal.
+  const dueDate = document.getElementById('td-due').value || (recurring ? toDateInputValue(new Date()) : null);
+  const body = {
+    title,
+    people: [...tdPeople],
+    dueDate,
+    recurring,
+  };
+  const submitBtn = document.getElementById('td-submit');
+  submitBtn.disabled = true;
+  try {
+    const res = await apiFetch(`/api/todos/${editingTodoId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    if (!res.ok) { const err = await res.json().catch(() => ({})); alert(err.error || 'Could not save to-do'); return; }
+    await loadTodos();
+    renderTodos();
+    closeTodoEditForm();
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+
+// Sign-in / sign-out wiring. MUST be attached before init()'s early return
+// below: when nobody is logged in, loadConfig() fails and init() bails out
+// immediately, so anything wired after that point never gets attached. Leaving
+// the login form unwired made "Sign in" fall through to a native form submit,
+// which reloaded the page straight back to the password prompt — the request
+// never reached /api/login at all.
+function wireAuthUi() {
+  document.getElementById('auth-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const password = document.getElementById('auth-password').value;
+    const btn = document.getElementById('auth-submit');
+    const errEl = document.getElementById('auth-error');
+    btn.disabled = true;
+    btn.textContent = 'Signing in…';
+    errEl.style.display = 'none';
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin', body: JSON.stringify({ password }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Incorrect password.');
+      }
+      document.getElementById('auth-password').value = '';
+      hideAuthOverlay();
+      authed = true;
+      // A fresh login lands mid-boot when init() had bailed out, so run the
+      // full start-up path rather than assuming the rest of init() already ran.
+      await init();
+    } catch (err) {
+      errEl.textContent = err.message || 'Could not sign in. Try again.';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Sign in';
+    }
+  });
+
+  document.getElementById('signin-btn').addEventListener('click', showAuthOverlay);
+
+  document.getElementById('signout-btn').addEventListener('click', async () => {
+    await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
+    authed = false;
+    const stillOk = await loadConfig();
+    if (!stillOk) { showAuthOverlay(); return; }
+    buildFilterBar();
+    await loadEvents();
+    render();
+    updateAuthUI();
+  });
+}
+
+// Guard against init() running its one-time setup twice — it now re-runs after
+// a successful sign-in (see wireAuthUi above).
+let initialized = false;
+
+async function init() {
+  const ok = await loadConfig();
+  if (!ok) { showAuthOverlay(); return; }
+  if (initialized) {
+    // Already booted once (e.g. signed out then back in) — just refresh data.
+    buildFilterBar();
+    await loadEvents();
+    render();
+    updateAuthUI();
+    return;
+  }
+  initialized = true;
+
+  buildFilterBar();
+  await loadEvents();
+  document.getElementById('view-btn').textContent = viewMode === 'agenda' ? '⊞' : '☰';
+  render();
+  updateAuthUI();
+  updateClock();
+
+  const themeBtn = document.getElementById('theme-btn');
+  themeBtn.addEventListener('click', () => {
+    const next = THEME_ORDER[(THEME_ORDER.indexOf(currentTheme) + 1) % THEME_ORDER.length];
+    applyTheme(next);
+  });
+
+  const todayBtn = document.getElementById('today-btn');
+
+  document.getElementById('view-btn').addEventListener('click', () => {
+    viewMode = viewMode === 'grid' ? 'agenda' : 'grid';
+    document.getElementById('view-btn').textContent = viewMode === 'agenda' ? '⊞' : '☰';
+    render();
+  });
+
+  // Mobile is agenda-only — force it whenever we cross into the mobile breakpoint
+  // (the grid toggle is hidden there, so this is the only path that sets it).
+  mobileMQ.addEventListener('change', e => {
+    if (e.matches) viewMode = 'agenda';
+    render();
+  });
+
+  document.getElementById('prev-month').addEventListener('click', () => {
+    // First step back from the Today view lands on the current month in full
+    // (offset 0), not the previous month.
+    if (todayView) { todayView = false; viewOffset = 0; }
+    else viewOffset--;
+    render();
+  });
+  document.getElementById('next-month').addEventListener('click', () => {
+    // First step forward from the Today view advances to next month.
+    if (todayView) { todayView = false; viewOffset = 1; }
+    else viewOffset++;
+    render();
+  });
+  todayBtn.addEventListener('click', () => {
+    todayView = true; viewOffset = 0;
+    render();
+  });
+
+  // ---- Event detail popup ----
+  document.getElementById('grid').addEventListener('click', e => {
+    const evEl = e.target.closest('.event');
+    if (evEl) {
+      e.stopPropagation();
+      const uid = evEl.dataset.uid;
+      const start = evEl.dataset.start;
+      const ev = events.find(x => x.uid === uid && x.start === start) ||
+                 events.find(x => x.uid === uid) ||
+                 { uid, feedId: evEl.dataset.feedId, title: evEl.title,
+                   start: '', end: '', allDay: false, people: [] };
+      showEventDetail(ev);
+      return;
+    }
+    if (authed) {
+      const cell = e.target.closest('.day-cell');
+      if (cell && cell.dataset.date) openAddForm(cell.dataset.date);
+    }
+  });
+
+  document.getElementById('detail-close').addEventListener('click', closeDetailPopup);
+
+  document.getElementById('detail-overlay').addEventListener('click', e => {
+    if (e.target.id === 'detail-overlay') closeDetailPopup();
+  });
+
+
+  document.getElementById('detail-delete').addEventListener('click', async e => {
+    if (!confirm('Delete this event?')) return;
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Deleting…';
+    try {
+      const res = await apiFetch(`/api/events/${encodeURIComponent(btn.dataset.uid)}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Server error ${res.status}`);
+      }
+      await loadEvents();
+      render();
+      closeDetailPopup();
+    } catch (err) {
+      alert('Could not delete event: ' + err.message);
+      btn.disabled = false;
+      btn.textContent = 'Delete Event';
+    }
+  });
+
+  document.getElementById('detail-delete-one').addEventListener('click', async e => {
+    if (!confirm('Delete just this occurrence? All other dates of this recurring event will remain.')) return;
+    const btn = e.currentTarget;
+    const allBtn = document.getElementById('detail-delete-all');
+    btn.disabled = true;
+    allBtn.disabled = true;
+    btn.textContent = 'Deleting…';
+    try {
+      const uid = btn.dataset.uid;
+      const start = btn.dataset.start;
+      const res = await apiFetch(
+        `/api/events/${encodeURIComponent(uid)}?instanceStart=${encodeURIComponent(start)}`,
+        { method: 'DELETE' }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Server error ${res.status}`);
+      }
+      await loadEvents();
+      render();
+      closeDetailPopup();
+    } catch (err) {
+      alert('Could not delete occurrence: ' + err.message);
+      btn.disabled = false;
+      allBtn.disabled = false;
+      btn.textContent = 'Delete This Only';
+    }
+  });
+
+  document.getElementById('detail-delete-all').addEventListener('click', async e => {
+    if (!confirm('Delete ALL occurrences of this recurring event? This cannot be undone.')) return;
+    const btn = e.currentTarget;
+    const oneBtn = document.getElementById('detail-delete-one');
+    btn.disabled = true;
+    oneBtn.disabled = true;
+    btn.textContent = 'Deleting…';
+    try {
+      const uid = btn.dataset.uid;
+      const res = await apiFetch(`/api/events/${encodeURIComponent(uid)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Server error ${res.status}`);
+      }
+      await loadEvents();
+      render();
+      closeDetailPopup();
+    } catch (err) {
+      alert('Could not delete event: ' + err.message);
+      btn.disabled = false;
+      oneBtn.disabled = false;
+      btn.textContent = 'Delete All';
+    }
+  });
+
+  // ---- Add event form ----
+  populatePersonSelect();
+
+  document.getElementById('add-btn').addEventListener('click', () => openAddForm());
+
+  document.getElementById('ae-cancel').addEventListener('click', closeAddForm);
+
+  document.getElementById('add-overlay').addEventListener('click', e => {
+    if (e.target.id === 'add-overlay') closeAddForm();
+  });
+
+  document.getElementById('ae-allday').addEventListener('change', e => {
+    document.getElementById('ae-times').style.display = e.target.checked ? 'none' : '';
+  });
+
+  document.getElementById('ae-repeat').addEventListener('change', updateRepeatUI);
+  document.getElementById('ae-custom-unit').addEventListener('change', updateCustomUnitUI);
+  document.getElementById('ae-share').addEventListener('change', updateShareHint);
+  document.getElementById('ae-title').addEventListener('input', updateShareHint);
+
+  // Keep the "Monthly on the Nth weekday" label current as the date changes.
+  document.getElementById('ae-date').addEventListener('change', refreshDowOption);
+
+
+  document.getElementById('add-form').addEventListener('submit', e => {
+    e.preventDefault();
+    // For recurring edits the user must choose This/All explicitly; Enter does nothing.
+    if (editMode && editMode.recurring) return;
+    doSave();
+  });
+  document.getElementById('ae-save-one').addEventListener('click', () => doSave('one'));
+  document.getElementById('ae-save-all').addEventListener('click', () => doSave('all'));
+  document.getElementById('detail-edit').addEventListener('click', () => {
+    const ev = detailEv;
+    closeDetailPopup();
+    if (ev) openEditForm(ev);
+  });
+
+  // ---- Feed management ----
+  document.getElementById('feed-btn').addEventListener('click', openFeedForm);
+  document.getElementById('cf-cancel').addEventListener('click', closeFeedForm);
+  document.getElementById('feed-overlay').addEventListener('click', e => {
+    if (e.target.id === 'feed-overlay') closeFeedForm();
+  });
+
+  document.getElementById('cf-person').addEventListener('change', e => {
+    document.getElementById('cf-new-fields').style.display =
+      e.target.value === '__new__' ? '' : 'none';
+  });
+
+  document.getElementById('feed-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const url    = document.getElementById('cf-url').value.trim();
+    const name   = document.getElementById('cf-name').value.trim();
+    const icon   = document.getElementById('cf-icon').value.trim();
+    const personSel = document.getElementById('cf-person').value;
+
+    let person, color;
+    if (personSel === '__new__') {
+      person = document.getElementById('cf-new-name').value.trim();
+      color  = document.getElementById('cf-new-color').value;
+      if (!person) { alert('Please enter a name for the new person.'); return; }
+    } else {
+      person = personSel;
+      color  = null;
+    }
+
+    const btn = document.getElementById('cf-submit');
+    btn.disabled = true;
+    btn.textContent = 'Adding…';
+
+    try {
+      const res = await apiFetch('/api/feeds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, name, person, color, icon: icon || null })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Server error ${res.status}`);
+      }
+      await loadConfig();
+      populatePersonSelect();
+      await loadEvents();
+      render();
+      closeFeedForm();
+    } catch (err) {
+      alert('Could not add feed: ' + err.message);
+      btn.disabled = false;
+      btn.textContent = 'Add Feed';
+    }
+  });
+
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeAddForm(); closeDetailPopup(); hideAuthOverlay(); closeMealForm(); closeTodoEditForm(); }
+  });
+
+  window.addEventListener('resize', () => render());
+
+  // ---- Tab bar ----
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => showTab(btn.dataset.tab));
+  });
+
+  // ---- Meal planner ----
+  document.getElementById('meals-prev').addEventListener('click', () => {
+    mealsWeekStart = addDays(mealsWeekStart, -7);
+    renderMealsList();
+  });
+  document.getElementById('meals-next').addEventListener('click', () => {
+    mealsWeekStart = addDays(mealsWeekStart, 7);
+    renderMealsList();
+  });
+  document.getElementById('ml-cancel').addEventListener('click', closeMealForm);
+  document.getElementById('ml-delete').addEventListener('click', deleteMeal);
+  document.getElementById('meal-overlay').addEventListener('click', e => {
+    if (e.target.id === 'meal-overlay') closeMealForm();
+  });
+  document.getElementById('meal-form').addEventListener('submit', e => {
+    e.preventDefault();
+    saveMeal();
+  });
+
+  // ---- To-do ----
+  document.getElementById('todo-add-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const titleEl = document.getElementById('todo-add-title');
+    const title = titleEl.value.trim();
+    if (!title) return;
+    const people = [...todoAddPeople];
+    const dueEl = document.getElementById('todo-add-due');
+    const repeatEl = document.getElementById('todo-add-repeat');
+    const recurring = repeatEl.value || null;
+    const dueDate = dueEl.value || (recurring ? toDateInputValue(new Date()) : null);
+    const submitBtn = e.target.querySelector('button[type=submit]');
+    submitBtn.disabled = true;
+    try {
+      const res = await apiFetch('/api/todos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, people, dueDate, recurring }),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); alert(err.error || 'Could not add to-do'); return; }
+      titleEl.value = '';
+      dueEl.value = '';
+      repeatEl.value = '';
+      todoAddPeople = [];
+      populateTodoPersonSelect();
+      await loadTodos();
+      renderTodos();
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  document.getElementById('td-cancel').addEventListener('click', closeTodoEditForm);
+  document.getElementById('td-delete').addEventListener('click', async () => {
+    if (!editingTodoId) return;
+    if (!confirm('Delete this to-do?')) return;
+    const res = await apiFetch(`/api/todos/${editingTodoId}`, { method: 'DELETE' });
+    if (!res.ok) return;
+    await loadTodos();
+    renderTodos();
+    closeTodoEditForm();
+  });
+  document.getElementById('todo-overlay').addEventListener('click', e => {
+    if (e.target.id === 'todo-overlay') closeTodoEditForm();
+  });
+  document.getElementById('todo-edit-form').addEventListener('submit', e => {
+    e.preventDefault();
+    saveTodoEdit();
+  });
+
+  fetchWeather();
+  setInterval(fetchWeather, 1000 * 60 * 30);
+  setInterval(updateClock, 1000 * 30);
+  // Refresh events every 5 minutes from cache, re-render
+  setInterval(async () => {
+    await loadEvents();
+    render();
+  }, 1000 * 60 * 5);
+  // Re-render at midnight rollover by checking every minute for date change
+  let lastDate = new Date().getDate();
+  setInterval(() => {
+    const d = new Date().getDate();
+    if (d !== lastDate) {
+      lastDate = d;
+      render();
+    }
+  }, 1000 * 60);
+}
+
+(function() {
+  // Dev2 (Glass) is a single-mode theme — no light/dark variant, so no class is applied.
+})();
+
+wireAuthUi();   // must run before init() — init() bails early when logged out
+init();
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
