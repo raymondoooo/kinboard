@@ -126,7 +126,21 @@ async function changePasswordHandler(req, res) {
   const ok = await bcrypt.compare(currentPassword || '', household.password_hash);
   if (!ok) return res.status(401).json({ error: 'Current password is incorrect' });
   const passwordHash = await bcrypt.hash(newPassword, 10);
-  db.raw.prepare('UPDATE household SET password_hash = ? WHERE id = 1').run(passwordHash);
+
+  // Rotate the signing secret too, which is what actually invalidates every
+  // existing session. Changing only the hash left old cookies working — so
+  // someone changing the password *because it leaked* would believe they had
+  // kicked the intruder out while the intruder stayed signed in indefinitely.
+  // The one thing a password change must do is end other people's access.
+  const sessionSecret = crypto.randomBytes(32).toString('hex');
+  db.raw
+    .prepare('UPDATE household SET password_hash = ?, session_secret = ? WHERE id = 1')
+    .run(passwordHash, sessionSecret);
+
+  // Re-issue for the caller against the new secret, so the person who just
+  // changed it isn't logged out of their own browser as a side effect.
+  issueSessionCookie(res, getHousehold());
+
   res.json({ ok: true });
 }
 
