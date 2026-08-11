@@ -1343,6 +1343,37 @@
   .todo-people-field .person-chip-row { margin-top: 0; }
   .todo-repeat-field { display: flex; flex-direction: column; gap: 3px; }
   .todo-repeat-field label { font-size: 0.68rem; font-weight: 600; color: var(--muted); }
+  .todo-points-field { display: flex; flex-direction: column; gap: 3px; }
+  .todo-points-field label { font-size: 0.68rem; font-weight: 600; color: var(--muted); }
+  .todo-points-field input { width: 5.5rem; }
+
+  /* Chore toolbar: whose-chores filter + earnings summary */
+  #todo-toolbar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 8px 2px 12px; border-bottom: 1px solid var(--grid-line); margin-bottom: 10px;
+  }
+  #todo-toolbar label { font-size: 0.68rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  #todo-toolbar select {
+    background: var(--surface-2); border: 1px solid var(--hairline); color: var(--text);
+    border-radius: 8px; padding: 5px 10px; font-size: 0.85rem; min-height: 32px;
+  }
+  #chore-earnings { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+  .earn-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--surface); border: 1px solid var(--hairline);
+    border-radius: 999px; padding: 4px 10px; font-size: 0.8rem; white-space: nowrap;
+  }
+  .earn-chip .earn-name { font-weight: 600; }
+  .earn-chip .earn-val { color: var(--accent); font-weight: 700; }
+  .earn-chip button {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 0.72rem; text-decoration: underline; padding: 0;
+  }
+  .earn-chip button:hover { color: var(--text); }
+  .todo-points {
+    flex: 0 0 auto; font-size: 0.75rem; font-weight: 700; color: var(--accent);
+    background: var(--surface-2); border-radius: 999px; padding: 2px 8px; white-space: nowrap;
+  }
   #todo-add-repeat {
     background: var(--surface-2);
     border: 1px solid var(--hairline);
@@ -1709,8 +1740,19 @@
           <option value="monthly">Monthly</option>
         </select>
       </div>
+      <div class="todo-points-field">
+        <label for="todo-add-points">Points</label>
+        <input id="todo-add-points" type="number" min="0" max="9999" step="1" placeholder="0" />
+      </div>
       <button type="submit">Add</button>
     </form>
+
+    <div id="todo-toolbar">
+      <label for="todo-whose">Show</label>
+      <select id="todo-whose"><option value="">Everyone</option></select>
+      <div id="chore-earnings"></div>
+    </div>
+
     <div id="todos-list"></div>
   </div>
 </div>
@@ -1824,6 +1866,9 @@
         <option value="weekly">Weekly</option>
         <option value="monthly">Monthly</option>
       </select>
+
+      <label for="td-points">Points <span style="opacity:0.5;font-weight:400" id="td-points-hint">(optional)</span></label>
+      <input id="td-points" type="number" min="0" max="9999" step="1" placeholder="0" />
 
       <div class="ae-btns">
         <button type="button" id="td-cancel">Cancel</button>
@@ -3007,6 +3052,10 @@ function showTab(name) {
   }
   if (name === 'todos') {
     populateTodoPersonSelect();
+    buildWhoseSelect();
+    // Earnings are refetched on every visit, not just the first: another device
+    // may have completed chores or settled up since this tab was last opened.
+    loadChoreEarnings().then(renderChoreEarnings);
     if (!todosLoaded) { todosLoaded = true; loadTodos().then(renderTodos); }
     else renderTodos();
   }
@@ -3178,6 +3227,21 @@ function populateTodoPersonSelect() {
   renderPersonChips('todo-add-person-chips', todoAddPeople, NON_PERSON_NAMES);
 }
 
+// ── "Who am I?" ─────────────────────────────────────────────────────────────
+// Everyone shares one household password, so the server has no idea which
+// family member is looking at the screen. Identity is therefore a property of
+// the DEVICE, remembered locally — the kitchen tablet stays on "Everyone" while
+// a kid's phone can pin itself to just their chores.
+const ME_KEY = 'kb_me';
+function whoAmI() {
+  try { return localStorage.getItem(ME_KEY) || ''; } catch (_) { return ''; }
+}
+function setWhoAmI(name) {
+  try { name ? localStorage.setItem(ME_KEY, name) : localStorage.removeItem(ME_KEY); } catch (_) {}
+}
+
+let choreEarnings = null;
+
 async function loadTodos() {
   const res = await apiFetch('/api/todos');
   if (!res.ok) return;
@@ -3185,17 +3249,108 @@ async function loadTodos() {
   todos = data.todos || [];
 }
 
+async function loadChoreEarnings() {
+  try {
+    const res = await apiFetch('/api/chores/earnings');
+    choreEarnings = res.ok ? await res.json() : null;
+  } catch (_) { choreEarnings = null; }
+}
+
+function money(cents) {
+  const sym = (choreEarnings && choreEarnings.currencySymbol) || '$';
+  return `${sym}${(cents / 100).toFixed(2)}`;
+}
+
+// Populate the whose-chores selector from the member list, preserving the
+// device's saved choice even if the roster reloads.
+function buildWhoseSelect() {
+  const sel = document.getElementById('todo-whose');
+  if (!sel) return;
+  const me = whoAmI();
+  sel.innerHTML = '<option value="">Everyone</option>';
+  const names = Object.keys((appConfig && appConfig.colors) || {})
+    .filter(n => !NON_PERSON_NAMES.has(n));
+  for (const n of names) {
+    const o = document.createElement('option');
+    o.value = n;
+    o.textContent = withEmoji(n);
+    sel.appendChild(o);
+  }
+  // A saved name that no longer exists (person renamed/removed) falls back to
+  // Everyone rather than silently filtering everything out.
+  sel.value = names.includes(me) ? me : '';
+  if (sel.value !== me) setWhoAmI(sel.value);
+}
+
+function renderChoreEarnings() {
+  const wrap = document.getElementById('chore-earnings');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  if (!choreEarnings || !choreEarnings.people || !choreEarnings.people.length) return;
+
+  const me = whoAmI();
+  const showsMoney = (choreEarnings.pointValueCents || 0) > 0;
+  // When a device has picked a person, show only their chip — a kid checking
+  // their own balance doesn't need a leaderboard of their siblings.
+  const people = me ? choreEarnings.people.filter(p => p.person === me) : choreEarnings.people;
+
+  for (const p of people) {
+    if (!p.pointsOutstanding && !p.points) continue;
+    const chip = document.createElement('div');
+    chip.className = 'earn-chip';
+    chip.innerHTML =
+      `<span class="earn-name">${escapeHtml(withEmoji(p.person))}</span>` +
+      `<span class="earn-val">${p.pointsOutstanding} pt${p.pointsOutstanding === 1 ? '' : 's'}` +
+      (showsMoney ? ` · ${money(p.owedCents)}` : '') + `</span>`;
+    if (p.pointsOutstanding > 0) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = 'paid';
+      btn.title = `Mark ${p.person}'s ${p.pointsOutstanding} points as settled`;
+      btn.addEventListener('click', async () => {
+        const label = showsMoney ? money(p.owedCents) : `${p.pointsOutstanding} points`;
+        if (!confirm(`Mark ${label} as paid to ${p.person}?\n\nTheir history is kept — this only clears what's owed.`)) return;
+        await apiFetch('/api/chores/payout', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ person: p.person }),
+        });
+        await loadChoreEarnings();
+        renderChoreEarnings();
+      });
+      chip.appendChild(btn);
+    }
+    wrap.appendChild(chip);
+  }
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : s;
+  return d.innerHTML;
+}
+
 function renderTodos() {
   const list = document.getElementById('todos-list');
   list.innerHTML = '';
-  if (!todos.length) {
+
+  const me = whoAmI();
+  // Unassigned chores stay visible to everyone — "empty the dishwasher" with
+  // nobody's name on it is still the household's job, and hiding it would let
+  // shared work quietly disappear from every filtered view.
+  const visible = me
+    ? todos.filter(t => !t.people || !t.people.length || t.people.includes(me))
+    : todos;
+
+  if (!visible.length) {
     const empty = document.createElement('div');
     empty.id = 'todos-empty';
-    empty.textContent = 'No to-dos yet — add one above.';
+    empty.textContent = me
+      ? `Nothing for ${me} right now.`
+      : 'No to-dos yet — add one above.';
     list.appendChild(empty);
     return;
   }
-  for (const t of todos) {
+  for (const t of visible) {
     const row = document.createElement('div');
     row.className = 'todo-row' + (t.done ? ' done' : '');
 
@@ -3229,6 +3384,18 @@ function renderTodos() {
       row.appendChild(name);
     }
 
+    if (t.points > 0) {
+      const pts = document.createElement('div');
+      pts.className = 'todo-points';
+      pts.textContent = `${t.points} pt${t.points === 1 ? '' : 's'}`;
+      const cents = (appConfig && appConfig.pointValueCents) || 0;
+      if (cents > 0) {
+        const sym = (appConfig && appConfig.currencySymbol) || '$';
+        pts.title = `Worth ${sym}${((t.points * cents) / 100).toFixed(2)}`;
+      }
+      row.appendChild(pts);
+    }
+
     if (t.due_date) {
       const due = document.createElement('div');
       due.className = 'todo-due';
@@ -3252,6 +3419,9 @@ async function toggleTodo(id, done) {
   await apiFetch(`/api/todos/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ done }) });
   await loadTodos();
   renderTodos();
+  // Checking a chore off is what mints points, so the balance has to move in
+  // the same beat — that immediate feedback is the whole motivation loop.
+  if (done) { await loadChoreEarnings(); renderChoreEarnings(); }
 }
 
 async function deleteTodo(id) {
@@ -3267,6 +3437,12 @@ function openTodoEditForm(todo) {
   document.getElementById('td-title').value = todo.title || '';
   document.getElementById('td-due').value = todo.due_date || '';
   document.getElementById('td-repeat').value = todo.recurring || '';
+  document.getElementById('td-points').value = todo.points ? String(todo.points) : '';
+  const cents = (appConfig && appConfig.pointValueCents) || 0;
+  const sym = (appConfig && appConfig.currencySymbol) || '$';
+  document.getElementById('td-points-hint').textContent = cents > 0
+    ? `(${sym}${(cents / 100).toFixed(2)} each)`
+    : '(optional)';
   tdPeople = Array.isArray(todo.people) ? [...todo.people] : [];
   renderPersonChips('td-person-chips', tdPeople, NON_PERSON_NAMES);
   document.getElementById('todo-overlay').classList.add('open');
@@ -3290,6 +3466,7 @@ async function saveTodoEdit() {
     people: [...tdPeople],
     dueDate,
     recurring,
+    points: Math.max(0, parseInt(document.getElementById('td-points').value, 10) || 0),
   };
   const submitBtn = document.getElementById('td-submit');
   submitBtn.disabled = true;
@@ -3661,18 +3838,21 @@ async function init() {
     const repeatEl = document.getElementById('todo-add-repeat');
     const recurring = repeatEl.value || null;
     const dueDate = dueEl.value || (recurring ? toDateInputValue(new Date()) : null);
+    const pointsEl = document.getElementById('todo-add-points');
+    const points = Math.max(0, parseInt(pointsEl.value, 10) || 0);
     const submitBtn = e.target.querySelector('button[type=submit]');
     submitBtn.disabled = true;
     try {
       const res = await apiFetch('/api/todos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, people, dueDate, recurring }),
+        body: JSON.stringify({ title, people, dueDate, recurring, points }),
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); alert(err.error || 'Could not add to-do'); return; }
       titleEl.value = '';
       dueEl.value = '';
       repeatEl.value = '';
+      pointsEl.value = '';
       todoAddPeople = [];
       populateTodoPersonSelect();
       await loadTodos();
@@ -3680,6 +3860,14 @@ async function init() {
     } finally {
       submitBtn.disabled = false;
     }
+  });
+
+  // Whose chores this device shows. Persisted locally, so each phone/tablet
+  // keeps its own answer without any server-side notion of "current user".
+  document.getElementById('todo-whose').addEventListener('change', e => {
+    setWhoAmI(e.target.value);
+    renderTodos();
+    renderChoreEarnings();
   });
 
   document.getElementById('td-cancel').addEventListener('click', closeTodoEditForm);

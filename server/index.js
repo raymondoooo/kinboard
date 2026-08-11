@@ -706,6 +706,10 @@ app.get('/api/config', requireViewAccess, async (req, res) => {
     // Title keywords that auto-share an event to the read-only link. The client
     // uses these to show which events are currently shared.
     shareKeywords: Array.isArray(settings.share_keywords) ? settings.share_keywords : [],
+    // Chore points. pointValueCents = 0 means "points only, no money" — a
+    // perfectly normal setup, so the UI must not assume a currency.
+    pointValueCents: settings.point_value_cents || 0,
+    currencySymbol: settings.currency_symbol || '$',
     // Whether THIS request is logged in with the household password — drives
     // whether the client shows write controls (add/edit/delete) or read-only
     // (e.g. an anonymous visitor on a public calendar).
@@ -1061,6 +1065,11 @@ app.post('/api/todos',       auth.requireAuth, todos.create);
 app.patch('/api/todos/:id',  auth.requireAuth, todos.update);
 app.delete('/api/todos/:id', auth.requireAuth, todos.remove);
 
+// Chore points — per-person totals, history, and settling up.
+app.get('/api/chores/earnings',    auth.requireAuth, todos.earnings);
+app.get('/api/chores/completions', auth.requireAuth, todos.completions);
+app.post('/api/chores/payout',     auth.requireAuth, todos.payout);
+
 // ── One-time calendar import (migrate off a live feed subscription) ──
 // Unlike a Feed (live, read-only, re-fetched every few minutes), this parses
 // an iCal URL ONCE and writes native, fully-editable rows into `events`:
@@ -1263,6 +1272,14 @@ app.patch('/api/settings', auth.requireAuth, async (req, res) => {
   if (Array.isArray(b.holidays)) {
     const validKeys = new Set(HOLIDAY_DEFS.map(h => h.key));
     update.holidays = b.holidays.filter(k => validKeys.has(k));
+  }
+
+  if (b.point_value_cents !== undefined) {
+    const c = Math.trunc(Number(b.point_value_cents));
+    update.point_value_cents = Number.isFinite(c) ? Math.min(100000, Math.max(0, c)) : 0;
+  }
+  if (typeof b.currency_symbol === 'string') {
+    update.currency_symbol = b.currency_symbol.trim().slice(0, 4) || '$';
   }
 
   if (Array.isArray(b.share_keywords)) {

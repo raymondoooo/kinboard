@@ -21,6 +21,32 @@ raw.pragma('busy_timeout = 5000');
 raw.exec(fs.readFileSync(path.join(__dirname, '..', 'schema.sql'), 'utf8'));
 raw.prepare('INSERT OR IGNORE INTO settings (id) VALUES (1)').run();
 
+// ── Adding a column to an existing install ──────────────────────────────────
+// schema.sql is re-executed on EVERY boot, so it can only contain statements
+// that are safe to run repeatedly. `create table if not exists` is; a bare
+// `alter table … add column` is NOT — it throws once the column exists, which
+// would crash-loop the container for everyone who already has data.
+//
+// So new columns go in two places: the `create table` above (for fresh
+// installs) and a call here (for existing ones). This checks the live table
+// shape first, so it applies exactly once and is a no-op on every later boot.
+//
+// Only ever ADD. Dropping or renaming a column, or adding a NOT NULL without a
+// default, would break databases already in the wild.
+function ensureColumn(table, column, definition) {
+  const exists = raw.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+  if (exists) return false;
+  raw.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  console.log(`[db] added column ${table}.${column}`);
+  return true;
+}
+
+// Upgrades for databases created before a given feature existed. Keep these
+// forever — a user can jump from any old version straight to the newest image.
+ensureColumn('todos', 'points', 'integer not null default 0');
+ensureColumn('settings', 'point_value_cents', 'integer not null default 0');
+ensureColumn('settings', 'currency_symbol', "text not null default '$'");
+
 // ── Column type maps ────────────────────────────────────────────────────────
 // SQLite has no array/JSON or boolean types. JSON columns round-trip through
 // TEXT (JSON.stringify on write, JSON.parse on read); boolean columns round-
