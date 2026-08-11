@@ -179,6 +179,12 @@
     .toggle-field { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
     .toggle-label { font-size: 0.92rem; color: var(--text); }
     .toggle-desc { font-size: 0.78rem; color: var(--muted); margin-top: 0.2rem; }
+    .toggle-warn {
+      display: none; margin-top: 0.55rem; padding: 0.55rem 0.65rem; border-radius: 6px;
+      font-size: 0.78rem; line-height: 1.45;
+      background: rgba(220, 38, 38, 0.09); border: 1px solid rgba(220, 38, 38, 0.35); color: #b91c1c;
+    }
+    .toggle-warn.on { display: block; }
     .switch { position: relative; width: 46px; height: 26px; flex-shrink: 0; }
     .switch input { opacity: 0; width: 0; height: 0; }
     .switch .track { position: absolute; inset: 0; background: var(--border); border-radius: 13px; transition: background 0.15s; }
@@ -425,11 +431,26 @@
           <div class="theme-grid" id="theme-grid"></div>
         </div>
 
+        <!-- Wording matters here. "Anyone with the link" (the old label) reads
+             like the Share link below it — an unguessable URL showing only the
+             events you tagged. This toggle is not that: it removes the password
+             from the calendar itself, so every event, time and location is
+             readable by anyone who reaches this address. -->
         <div class="field">
           <div class="toggle-field">
             <div>
-              <div class="toggle-label">Public calendar</div>
-              <div class="toggle-desc">Anyone with the link can view (read-only), no password needed. Off = the household password is required to view.</div>
+              <div class="toggle-label">Turn off the password (public calendar)</div>
+              <div class="toggle-desc">
+                Lets <strong>anyone who can reach this address</strong> read the whole
+                calendar — every event, time, person and location — with no password.
+                This is not the Share link: it has no secret URL and no keyword filter.
+                Off = the household password is required to view.
+              </div>
+              <div class="toggle-warn" id="public-warn">
+                This calendar is readable by anyone who can reach it. If it is exposed to
+                the internet, that means anyone at all. To share only some events instead,
+                turn this off and use the <strong>Share link</strong> section below.
+              </div>
             </div>
             <label class="switch">
               <input type="checkbox" id="set-public" />
@@ -816,7 +837,31 @@
       return res;
     }
 
+    // Tracks the saved state of the public toggle, so the confirmation fires on
+    // the transition to public rather than on every save while it's already on.
+    let wasPublic = false;
+    function syncPublicWarning() {
+      const on = document.getElementById('set-public').checked;
+      document.getElementById('public-warn').classList.toggle('on', on);
+    }
+    document.addEventListener('change', (e) => {
+      if (e.target && e.target.id === 'set-public') syncPublicWarning();
+    });
+
     async function saveAll() {
+      // Confirm before anything else runs: bailing out after the button is
+      // disabled would leave it stuck on "Saving…".
+      const publicBox = document.getElementById('set-public');
+      if (publicBox.checked && !wasPublic) {
+        const ok = confirm(
+          'Turn off the password for this calendar?\n\n' +
+          'Anyone who can reach this address will be able to read every event, ' +
+          'time, person and location — with no password.\n\n' +
+          'To share only some events, cancel and use the Share link section instead.'
+        );
+        if (!ok) { publicBox.checked = false; syncPublicWarning(); return; }
+      }
+
       const btn = document.getElementById('save-all');
       btn.disabled = true;
       btn.textContent = 'Saving…';
@@ -861,6 +906,7 @@
           currency_symbol: document.getElementById('set-currency').value.trim() || '$',
         };
         const res = await api('PATCH', '/api/settings', body);
+        wasPublic = body.is_public;
         localStorage.setItem('theme', body.theme);
         if (body.zip && !res.geocoded) errors.push('ZIP code could not be located');
       } catch (e) {
@@ -1459,6 +1505,8 @@
       document.getElementById('set-firstday').value = String(config.firstDayOfWeek ?? 0);
       document.getElementById('set-weeks').value = String(config.weeksToShow ?? 4);
       document.getElementById('set-public').checked = !!config.isPublic;
+      wasPublic = !!config.isPublic;
+      syncPublicWarning();
       document.getElementById('set-point-value').value =
         config.pointValueCents ? (config.pointValueCents / 100).toFixed(2) : '';
       document.getElementById('set-currency').value = config.currencySymbol || '$';
