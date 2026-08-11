@@ -52,10 +52,23 @@ function ensureColumn(table, column, definition) {
 // to start is dramatically better than that, and it's what mature self-hosted
 // projects do.
 //
-// Migrations are forward-only and ordered. Each `up()` must be safe to re-run:
-// databases predating this versioning scheme report version 0 and may already
-// have some of these columns from a pre-release build, so every step goes
-// through ensureColumn rather than a bare ALTER.
+// Migrations are forward-only and ordered. Each `up(db)` receives the raw
+// database handle and runs inside its own transaction, so it can do schema AND
+// data work together — SQLite makes DDL transactional, so a step that adds a
+// column and backfills it either fully applies or not at all:
+//
+//   { version: 3, describe: 'split name into first/last', up(db) {
+//       ensureColumn('members', 'first_name', 'text');
+//       for (const m of db.prepare('SELECT id, display_name FROM members').all()) {
+//         db.prepare('UPDATE members SET first_name = ? WHERE id = ?')
+//           .run(String(m.display_name || '').split(' ')[0], m.id);
+//       }
+//   }}
+//
+// Each `up()` must be safe to re-run: databases predating this versioning
+// scheme report version 0 and may already have some columns from a pre-release
+// build, so schema steps go through ensureColumn rather than a bare ALTER.
+// A backup is taken before any migration runs on an existing database.
 const SCHEMA_VERSION = 2;
 
 const MIGRATIONS = [
@@ -76,6 +89,48 @@ const MIGRATIONS = [
   },
 ];
 
+// Snapshot the database before touching its shape. Per-migration transactions
+// protect a single step, but a run of several steps can still commit two and
+// fail on the third — leaving a half-migrated database and no way back. This is
+// the "restore a backup" that the downgrade message promises actually exists.
+// Uses better-sqlite3's online backup, so WAL is checkpointed into one
+// consistent file rather than copied mid-write.
+function backupBeforeMigrating(fromVersion, toVersion) {
+  try {
+    const dir = path.join(DATA_DIR, 'backups');
+    fs.mkdirSync(dir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const dest = path.join(dir, `pre-upgrade-v${fromVersion}-to-v${toVersion}-${stamp}.db`);
+
+    // VACUUM INTO, not db.backup(): better-sqlite3's backup() is ASYNCHRONOUS
+    // and returns a promise. Migrations run synchronously at startup, so an
+    // un-awaited backup finishes *after* they do — producing a "pre-upgrade"
+    // snapshot of the already-upgraded database, which is worse than useless
+    // because it looks like a safety net and isn't. VACUUM INTO is synchronous
+    // and writes a consistent, WAL-checkpointed copy before anything changes.
+    raw.exec(`VACUUM INTO '${dest.replace(/'/g, "''")}'`);
+
+    console.log(`[db] pre-upgrade backup written to ${dest}`);
+    return dest;
+  } catch (err) {
+    // A fresh install has nothing worth preserving, so a failure here must not
+    // block first boot — but on an existing database it's worth shouting about.
+    console.error(`[db] WARNING: could not write pre-upgrade backup: ${err.message}`);
+    return null;
+  }
+}
+
+// Has this database been set up by a real household? schema.sql has already run
+// by this point, so the tables exist either way — the presence of the household
+// row is what distinguishes "someone's calendar" from "an empty file".
+function hasUserData() {
+  try {
+    return !!raw.prepare('SELECT 1 FROM household WHERE id = 1').get();
+  } catch {
+    return false;
+  }
+}
+
 function migrate() {
   const current = raw.pragma('user_version', { simple: true }) || 0;
 
@@ -95,10 +150,34 @@ function migrate() {
 
   if (current === SCHEMA_VERSION) return;
 
+  // Back up any database that actually holds something.
+  //
+  // Do NOT infer that from the version number: databases created before this
+  // versioning scheme existed report version 0, which is also what a brand-new
+  // file reports. Treating 0 as "new" would skip the backup for every existing
+  // user upgrading from an earlier release — precisely the people with data to
+  // lose. Completed setup is the honest signal that there's something to
+  // protect; a fresh install has no household row and needs no snapshot.
+  if (hasUserData()) backupBeforeMigrating(current, SCHEMA_VERSION);
+
   for (const m of MIGRATIONS) {
     if (m.version <= current) continue;
     console.log(`[db] migrating to schema v${m.version} — ${m.describe}`);
-    raw.transaction(() => m.up())();
+    try {
+      // One transaction per step, so a step either fully applies or not at all.
+      // SQLite makes DDL transactional, so schema and data changes commit
+      // together — a migration can reshape a column AND backfill it safely.
+      raw.transaction(() => m.up(raw))();
+    } catch (err) {
+      console.error(
+        `\n[db] MIGRATION FAILED at schema v${m.version} (${m.describe}):\n` +
+        `     ${err.message}\n\n` +
+        `     That step was rolled back, so the database is still at v${current}.\n` +
+        `     A pre-upgrade backup is in /app/data/backups. Please report this at\n` +
+        `     https://github.com/raymondoooo/kinboard/issues with the message above.\n`
+      );
+      process.exit(1);
+    }
   }
   raw.pragma(`user_version = ${SCHEMA_VERSION}`);
   console.log(`[db] schema is now v${SCHEMA_VERSION}`);
