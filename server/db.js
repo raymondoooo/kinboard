@@ -21,6 +21,170 @@ raw.pragma('busy_timeout = 5000');
 raw.exec(fs.readFileSync(path.join(__dirname, '..', 'schema.sql'), 'utf8'));
 raw.prepare('INSERT OR IGNORE INTO settings (id) VALUES (1)').run();
 
+// ── Adding a column to an existing install ──────────────────────────────────
+// schema.sql is re-executed on EVERY boot, so it can only contain statements
+// that are safe to run repeatedly. `create table if not exists` is; a bare
+// `alter table … add column` is NOT — it throws once the column exists, which
+// would crash-loop the container for everyone who already has data.
+//
+// So new columns go in two places: the `create table` above (for fresh
+// installs) and a call here (for existing ones). This checks the live table
+// shape first, so it applies exactly once and is a no-op on every later boot.
+//
+// Only ever ADD. Dropping or renaming a column, or adding a NOT NULL without a
+// default, would break databases already in the wild.
+function ensureColumn(table, column, definition) {
+  const exists = raw.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+  if (exists) return false;
+  raw.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  console.log(`[db] added column ${table}.${column}`);
+  return true;
+}
+
+// ── Schema versioning + downgrade protection ────────────────────────────────
+// The version lives in SQLite's own `PRAGMA user_version` (an integer in the
+// file header), so it needs no table and travels with the database file.
+//
+// The failure this exists to prevent: a user pulls a newer image, hits a bug,
+// and rolls back to the previous tag. Their database has already been upgraded,
+// and the older binary knows nothing about the new shape — so it writes happily
+// into a schema it doesn't understand and quietly corrupts their data. Refusing
+// to start is dramatically better than that, and it's what mature self-hosted
+// projects do.
+//
+// Migrations are forward-only and ordered. Each `up(db)` receives the raw
+// database handle and runs inside its own transaction, so it can do schema AND
+// data work together — SQLite makes DDL transactional, so a step that adds a
+// column and backfills it either fully applies or not at all:
+//
+//   { version: 3, describe: 'split name into first/last', up(db) {
+//       ensureColumn('members', 'first_name', 'text');
+//       for (const m of db.prepare('SELECT id, display_name FROM members').all()) {
+//         db.prepare('UPDATE members SET first_name = ? WHERE id = ?')
+//           .run(String(m.display_name || '').split(' ')[0], m.id);
+//       }
+//   }}
+//
+// Each `up()` must be safe to re-run: databases predating this versioning
+// scheme report version 0 and may already have some columns from a pre-release
+// build, so schema steps go through ensureColumn rather than a bare ALTER.
+// A backup is taken before any migration runs on an existing database.
+const SCHEMA_VERSION = 2;
+
+const MIGRATIONS = [
+  {
+    version: 1,
+    describe: 'baseline (tables are created by schema.sql)',
+    up() { /* schema.sql already ran above; nothing extra for the original shape */ },
+  },
+  {
+    version: 2,
+    describe: 'chore points, point value, and the earnings ledger',
+    up() {
+      ensureColumn('todos', 'points', 'integer not null default 0');
+      ensureColumn('settings', 'point_value_cents', 'integer not null default 0');
+      ensureColumn('settings', 'currency_symbol', "text not null default '$'");
+      // chore_completions itself is created by schema.sql (create table if not exists).
+    },
+  },
+];
+
+// Snapshot the database before touching its shape. Per-migration transactions
+// protect a single step, but a run of several steps can still commit two and
+// fail on the third — leaving a half-migrated database and no way back. This is
+// the "restore a backup" that the downgrade message promises actually exists.
+// Uses better-sqlite3's online backup, so WAL is checkpointed into one
+// consistent file rather than copied mid-write.
+function backupBeforeMigrating(fromVersion, toVersion) {
+  try {
+    const dir = path.join(DATA_DIR, 'backups');
+    fs.mkdirSync(dir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const dest = path.join(dir, `pre-upgrade-v${fromVersion}-to-v${toVersion}-${stamp}.db`);
+
+    // VACUUM INTO, not db.backup(): better-sqlite3's backup() is ASYNCHRONOUS
+    // and returns a promise. Migrations run synchronously at startup, so an
+    // un-awaited backup finishes *after* they do — producing a "pre-upgrade"
+    // snapshot of the already-upgraded database, which is worse than useless
+    // because it looks like a safety net and isn't. VACUUM INTO is synchronous
+    // and writes a consistent, WAL-checkpointed copy before anything changes.
+    raw.exec(`VACUUM INTO '${dest.replace(/'/g, "''")}'`);
+
+    console.log(`[db] pre-upgrade backup written to ${dest}`);
+    return dest;
+  } catch (err) {
+    // A fresh install has nothing worth preserving, so a failure here must not
+    // block first boot — but on an existing database it's worth shouting about.
+    console.error(`[db] WARNING: could not write pre-upgrade backup: ${err.message}`);
+    return null;
+  }
+}
+
+// Has this database been set up by a real household? schema.sql has already run
+// by this point, so the tables exist either way — the presence of the household
+// row is what distinguishes "someone's calendar" from "an empty file".
+function hasUserData() {
+  try {
+    return !!raw.prepare('SELECT 1 FROM household WHERE id = 1').get();
+  } catch {
+    return false;
+  }
+}
+
+function migrate() {
+  const current = raw.pragma('user_version', { simple: true }) || 0;
+
+  if (current > SCHEMA_VERSION) {
+    console.error(
+      `\n[db] REFUSING TO START — this database was created by a NEWER version of Kinboard.\n` +
+      `     database schema version: ${current}\n` +
+      `     this image understands:  ${SCHEMA_VERSION}\n\n` +
+      `     You have most likely rolled back to an older image. Running this version\n` +
+      `     would write into a schema it does not understand and could corrupt your\n` +
+      `     data, so it is stopping instead.\n\n` +
+      `     Fix: go back to the newer image tag. If you genuinely need to downgrade,\n` +
+      `     restore a backup from /app/data/backups taken before the upgrade.\n`
+    );
+    process.exit(1);
+  }
+
+  if (current === SCHEMA_VERSION) return;
+
+  // Back up any database that actually holds something.
+  //
+  // Do NOT infer that from the version number: databases created before this
+  // versioning scheme existed report version 0, which is also what a brand-new
+  // file reports. Treating 0 as "new" would skip the backup for every existing
+  // user upgrading from an earlier release — precisely the people with data to
+  // lose. Completed setup is the honest signal that there's something to
+  // protect; a fresh install has no household row and needs no snapshot.
+  if (hasUserData()) backupBeforeMigrating(current, SCHEMA_VERSION);
+
+  for (const m of MIGRATIONS) {
+    if (m.version <= current) continue;
+    console.log(`[db] migrating to schema v${m.version} — ${m.describe}`);
+    try {
+      // One transaction per step, so a step either fully applies or not at all.
+      // SQLite makes DDL transactional, so schema and data changes commit
+      // together — a migration can reshape a column AND backfill it safely.
+      raw.transaction(() => m.up(raw))();
+    } catch (err) {
+      console.error(
+        `\n[db] MIGRATION FAILED at schema v${m.version} (${m.describe}):\n` +
+        `     ${err.message}\n\n` +
+        `     That step was rolled back, so the database is still at v${current}.\n` +
+        `     A pre-upgrade backup is in /app/data/backups. Please report this at\n` +
+        `     https://github.com/raymondoooo/kinboard/issues with the message above.\n`
+      );
+      process.exit(1);
+    }
+  }
+  raw.pragma(`user_version = ${SCHEMA_VERSION}`);
+  console.log(`[db] schema is now v${SCHEMA_VERSION}`);
+}
+
+migrate();
+
 // ── Column type maps ────────────────────────────────────────────────────────
 // SQLite has no array/JSON or boolean types. JSON columns round-trip through
 // TEXT (JSON.stringify on write, JSON.parse on read); boolean columns round-

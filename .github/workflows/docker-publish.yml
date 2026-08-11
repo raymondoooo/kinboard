@@ -7,6 +7,12 @@ on:
   pull_request:
     branches: [main]
 
+# packages:write is what lets the publish job push to GHCR using the built-in
+# GITHUB_TOKEN — no extra secret needed for that registry.
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   # Builds the image and exercises it the way a new self-hoster would: empty
   # volume, no pre-seeded database, no host state. This is the check that catches
@@ -81,9 +87,38 @@ jobs:
 
       - name: App must run as a non-root user
         run: |
-          u=$(docker exec kinboard-ci ps -o user= -p 1 | tr -d ' ')
-          [ "$u" != "root" ] || { echo "FAIL: app runs as root"; exit 1; }
-          echo "app runs as: $u"
+          # Read the numeric uid of PID 1 from /proc rather than parsing `ps`.
+          # busybox's ps ignores `-o user= -p 1` and returns an empty string,
+          # which made `[ "$u" != "root" ]` pass vacuously — the check would have
+          # stayed green even if the app were running as root. Fail loudly if the
+          # value can't be read at all.
+          uid=$(docker exec kinboard-ci awk '/^Uid:/{print $2}' /proc/1/status)
+          [ -n "$uid" ] || { echo "FAIL: could not read uid of PID 1"; exit 1; }
+          [ "$uid" != "0" ] || { echo "FAIL: app runs as root (uid 0)"; exit 1; }
+          echo "app runs as uid $uid ($(docker exec kinboard-ci id -nu "$uid" 2>/dev/null || echo unknown))"
+
+      - name: Runtime image must not ship a build toolchain
+        run: |
+          # The compiler exists only to build better-sqlite3 and belongs in the
+          # build stage. If it reappears here, the multi-stage split has
+          # regressed and every user is pulling ~160MB of gcc.
+          for b in gcc g++ make python3; do
+            if docker exec kinboard-ci sh -c "command -v $b" >/dev/null 2>&1; then
+              echo "FAIL: $b present in the runtime image"; exit 1
+            fi
+          done
+          echo "runtime image is clean"
+          docker image inspect kinboard:ci --format 'image size: {{.Size}} bytes'
+
+      - name: Docker healthcheck must report healthy
+        run: |
+          for i in $(seq 1 30); do
+            s=$(docker inspect -f '{{.State.Health.Status}}' kinboard-ci 2>/dev/null || echo none)
+            [ "$s" = "healthy" ] && { echo "healthy after ${i}s"; exit 0; }
+            [ "$s" = "unhealthy" ] && { echo "FAIL: unhealthy"; docker logs kinboard-ci; exit 1; }
+            sleep 1
+          done
+          echo "FAIL: never became healthy (last status: $s)"; docker logs kinboard-ci; exit 1
 
       - name: Data must survive a container recreate
         run: |
@@ -99,6 +134,24 @@ jobs:
             -H 'Content-Type: application/json' -d '{"password":"ci-password-123"}' | grep -q '"ok":true'
           curl -fsS -b /tmp/j2 http://localhost:3000/api/events | grep -q 'CI event'
           echo "persistence OK"
+
+      - name: A newer database must refuse to boot on an older binary
+        run: |
+          set -e
+          # Simulate a rollback: bump the stored schema version past what this
+          # build understands, then confirm the container refuses to start
+          # rather than writing into a schema it doesn't know.
+          docker rm -f kinboard-ci2 >/dev/null 2>&1 || true
+          docker run --rm -v kinboard-ci-data:/app/data --entrypoint node kinboard:ci \
+            -e "const D=require('better-sqlite3');const d=new D('/app/data/kinboard.db');d.pragma('user_version = 9999');console.log('bumped to 9999')"
+
+          if docker run --name kinboard-guard -v kinboard-ci-data:/app/data kinboard:ci; then
+            echo "FAIL: started against a newer database"; exit 1
+          fi
+          docker logs kinboard-guard 2>&1 | grep -q "REFUSING TO START" \
+            || { echo "FAIL: no downgrade warning"; docker logs kinboard-guard; exit 1; }
+          echo "downgrade guard works"
+          docker rm -f kinboard-guard >/dev/null 2>&1 || true
 
       - name: Container logs (always)
         if: always()
@@ -117,18 +170,37 @@ jobs:
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
-      - uses: docker/login-action@v3
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Image name is derived from the account secret so nothing hardcodes it.
-      - name: Derive tags
+      # GHCR as well as Docker Hub: Docker Hub rate-limits anonymous pulls, which
+      # is a real problem for self-hosters who redeploy often. Same image, two
+      # places, no extra credentials.
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Generates the full tag ladder from the git tag — v1.2.3 produces
+      # :1.2.3, :1.2, :1 and :latest — so users can pin as tightly or as loosely
+      # as they want. Also emits the OCI labels (source, revision, created,
+      # version) that link the image back to this repo.
+      - name: Derive tags and labels
         id: meta
-        run: |
-          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/kinboard"
-          VERSION="${GITHUB_REF#refs/tags/v}"
-          echo "tags=${IMAGE}:${VERSION},${IMAGE}:latest" >> "$GITHUB_OUTPUT"
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/kinboard
+            ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
 
       - uses: docker/build-push-action@v6
         with:
@@ -136,5 +208,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: true
+          sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max

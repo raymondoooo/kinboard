@@ -1343,6 +1343,49 @@
   .todo-people-field .person-chip-row { margin-top: 0; }
   .todo-repeat-field { display: flex; flex-direction: column; gap: 3px; }
   .todo-repeat-field label { font-size: 0.68rem; font-weight: 600; color: var(--muted); }
+  .todo-points-field { display: flex; flex-direction: column; gap: 3px; }
+  .todo-points-field label { font-size: 0.68rem; font-weight: 600; color: var(--muted); }
+  .todo-points-field input { width: 5.5rem; }
+
+  /* Chore toolbar: whose-chores filter + earnings summary */
+  #todo-toolbar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 8px 2px 12px; border-bottom: 1px solid var(--grid-line); margin-bottom: 10px;
+  }
+  #todo-toolbar label { font-size: 0.68rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  #todo-toolbar select {
+    background: var(--surface-2); border: 1px solid var(--hairline); color: var(--text);
+    border-radius: 8px; padding: 5px 10px; font-size: 0.85rem; min-height: 32px;
+  }
+  /* Segmented control — one row instead of a fourth tab. The chore/to-do line
+     is fuzzy, so this filters an existing list rather than forcing people to
+     categorise anything when they add an item. */
+  #todo-kind { display: inline-flex; background: var(--surface-2); border: 1px solid var(--hairline); border-radius: 999px; padding: 2px; }
+  .kind-btn {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 0.78rem; font-weight: 600; padding: 5px 12px; border-radius: 999px;
+    min-height: 30px; white-space: nowrap; transition: background 0.12s, color 0.12s;
+  }
+  .kind-btn:hover { color: var(--text); }
+  .kind-btn.active { background: var(--accent); color: #053038; }
+
+  #chore-earnings { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+  .earn-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--surface); border: 1px solid var(--hairline);
+    border-radius: 999px; padding: 4px 10px; font-size: 0.8rem; white-space: nowrap;
+  }
+  .earn-chip .earn-name { font-weight: 600; }
+  .earn-chip .earn-val { color: var(--accent); font-weight: 700; }
+  .earn-chip button {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 0.72rem; text-decoration: underline; padding: 0;
+  }
+  .earn-chip button:hover { color: var(--text); }
+  .todo-points {
+    flex: 0 0 auto; font-size: 0.75rem; font-weight: 700; color: var(--accent);
+    background: var(--surface-2); border-radius: 999px; padding: 2px 8px; white-space: nowrap;
+  }
   #todo-add-repeat {
     background: var(--surface-2);
     border: 1px solid var(--hairline);
@@ -1602,8 +1645,13 @@
     #meal-modal { width: 95%; padding: 16px; }
     #todo-modal { width: 95%; padding: 16px; }
     #todo-add-form { padding: 10px; }
-    #todo-add-title, .todo-people-field, .todo-due-field, .todo-repeat-field { flex: 1 1 100%; }
-    .todo-due-field input, #todo-add-repeat { width: 100%; }
+    #todo-add-title, .todo-people-field, .todo-due-field, .todo-repeat-field, .todo-points-field { flex: 1 1 100%; }
+    .todo-due-field input, #todo-add-repeat, .todo-points-field input { width: 100%; }
+    /* On a phone the earnings chips get their own line rather than being
+       squeezed against the segmented control. */
+    #chore-earnings { margin-left: 0; flex: 1 1 100%; }
+    #todo-kind { flex: 0 0 auto; }
+    .kind-btn { padding: 5px 10px; }
 
     /* On a phone the row can't fit badges + a full name list + due + delete
        AND leave the title readable — with several assignees the title was
@@ -1709,8 +1757,24 @@
           <option value="monthly">Monthly</option>
         </select>
       </div>
+      <div class="todo-points-field">
+        <label for="todo-add-points">Points</label>
+        <input id="todo-add-points" type="number" min="0" max="9999" step="1" placeholder="0" />
+      </div>
       <button type="submit">Add</button>
     </form>
+
+    <div id="todo-toolbar">
+      <label for="todo-whose">Show</label>
+      <select id="todo-whose"><option value="">Everyone</option></select>
+      <div id="todo-kind" role="group" aria-label="Filter by type">
+        <button type="button" class="kind-btn active" data-kind="all">All</button>
+        <button type="button" class="kind-btn" data-kind="chores">Chores</button>
+        <button type="button" class="kind-btn" data-kind="todos">To-dos</button>
+      </div>
+      <div id="chore-earnings"></div>
+    </div>
+
     <div id="todos-list"></div>
   </div>
 </div>
@@ -1824,6 +1888,9 @@
         <option value="weekly">Weekly</option>
         <option value="monthly">Monthly</option>
       </select>
+
+      <label for="td-points">Points <span style="opacity:0.5;font-weight:400" id="td-points-hint">(optional)</span></label>
+      <input id="td-points" type="number" min="0" max="9999" step="1" placeholder="0" />
 
       <div class="ae-btns">
         <button type="button" id="td-cancel">Cancel</button>
@@ -3007,6 +3074,11 @@ function showTab(name) {
   }
   if (name === 'todos') {
     populateTodoPersonSelect();
+    buildWhoseSelect();
+    syncKindButtons();
+    // Earnings are refetched on every visit, not just the first: another device
+    // may have completed chores or settled up since this tab was last opened.
+    loadChoreEarnings().then(renderChoreEarnings);
     if (!todosLoaded) { todosLoaded = true; loadTodos().then(renderTodos); }
     else renderTodos();
   }
@@ -3178,6 +3250,41 @@ function populateTodoPersonSelect() {
   renderPersonChips('todo-add-person-chips', todoAddPeople, NON_PERSON_NAMES);
 }
 
+// ── "Who am I?" ─────────────────────────────────────────────────────────────
+// Everyone shares one household password, so the server has no idea which
+// family member is looking at the screen. Identity is therefore a property of
+// the DEVICE, remembered locally — the kitchen tablet stays on "Everyone" while
+// a kid's phone can pin itself to just their chores.
+const ME_KEY = 'kb_me';
+function whoAmI() {
+  try { return localStorage.getItem(ME_KEY) || ''; } catch (_) { return ''; }
+}
+function setWhoAmI(name) {
+  try { name ? localStorage.setItem(ME_KEY, name) : localStorage.removeItem(ME_KEY); } catch (_) {}
+}
+
+// Chores and to-dos live in ONE list, split by a filter rather than by separate
+// tabs. The boundary between them is genuinely fuzzy ("clean your room this
+// Saturday" is either, depending on the family), and a tab would force everyone
+// to answer that question at the moment they add an item. A filter never asks.
+// Also per-device, so a kid's phone can sit on Chores while the kitchen tablet
+// shows everything.
+const KIND_KEY = 'kb_todo_kind';
+function todoKind() {
+  try { return localStorage.getItem(KIND_KEY) || 'all'; } catch (_) { return 'all'; }
+}
+function setTodoKind(kind) {
+  try { kind === 'all' ? localStorage.removeItem(KIND_KEY) : localStorage.setItem(KIND_KEY, kind); } catch (_) {}
+}
+
+// What makes something a chore: it repeats, or it's worth something. Both are
+// already recorded on the item, so nothing new has to be classified by hand.
+function isChore(t) {
+  return !!t.recurring || (t.points || 0) > 0;
+}
+
+let choreEarnings = null;
+
 async function loadTodos() {
   const res = await apiFetch('/api/todos');
   if (!res.ok) return;
@@ -3185,17 +3292,129 @@ async function loadTodos() {
   todos = data.todos || [];
 }
 
+async function loadChoreEarnings() {
+  try {
+    const res = await apiFetch('/api/chores/earnings');
+    choreEarnings = res.ok ? await res.json() : null;
+  } catch (_) { choreEarnings = null; }
+}
+
+function money(cents) {
+  const sym = (choreEarnings && choreEarnings.currencySymbol) || '$';
+  return `${sym}${(cents / 100).toFixed(2)}`;
+}
+
+// Populate the whose-chores selector from the member list, preserving the
+// device's saved choice even if the roster reloads.
+function buildWhoseSelect() {
+  const sel = document.getElementById('todo-whose');
+  if (!sel) return;
+  const me = whoAmI();
+  sel.innerHTML = '<option value="">Everyone</option>';
+  const names = Object.keys((appConfig && appConfig.colors) || {})
+    .filter(n => !NON_PERSON_NAMES.has(n));
+  for (const n of names) {
+    const o = document.createElement('option');
+    o.value = n;
+    o.textContent = withEmoji(n);
+    sel.appendChild(o);
+  }
+  // A saved name that no longer exists (person renamed/removed) falls back to
+  // Everyone rather than silently filtering everything out.
+  sel.value = names.includes(me) ? me : '';
+  if (sel.value !== me) setWhoAmI(sel.value);
+}
+
+// Reflect the saved segment on load, so a device that was left on "Chores"
+// comes back to it rather than silently resetting to All.
+function syncKindButtons() {
+  const kind = todoKind();
+  document.querySelectorAll('#todo-kind .kind-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.kind === kind);
+    b.setAttribute('aria-pressed', String(b.dataset.kind === kind));
+  });
+}
+
+function renderChoreEarnings() {
+  const wrap = document.getElementById('chore-earnings');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  // Balances are meaningless next to a list that deliberately excludes every
+  // earning item, so the To-dos view drops them entirely.
+  if (todoKind() === 'todos') return;
+  if (!choreEarnings || !choreEarnings.people || !choreEarnings.people.length) return;
+
+  const me = whoAmI();
+  // No rate set means nothing has a cash value yet, so there is no balance worth
+  // showing a kid. The parent sets a value in Settings to switch this on.
+  if ((choreEarnings.pointValueCents || 0) <= 0) return;
+
+  // When a device has picked a person, show only their chip — a kid checking
+  // their own balance doesn't need a leaderboard of their siblings.
+  const people = me ? choreEarnings.people.filter(p => p.person === me) : choreEarnings.people;
+
+  for (const p of people) {
+    if (!p.pointsOutstanding && !p.points) continue;
+    const chip = document.createElement('div');
+    chip.className = 'earn-chip';
+    chip.innerHTML =
+      `<span class="earn-name">${escapeHtml(withEmoji(p.person))}</span>` +
+      `<span class="earn-val">${money(p.owedCents)}</span>`;
+    if (p.pointsOutstanding > 0) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = 'paid';
+      btn.title = `Settle up with ${p.person} (${p.pointsOutstanding} points)`;
+      btn.addEventListener('click', async () => {
+        const label = money(p.owedCents);
+        if (!confirm(`Mark ${label} as paid to ${p.person}?\n\nTheir history is kept — this only clears what's owed.`)) return;
+        await apiFetch('/api/chores/payout', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ person: p.person }),
+        });
+        await loadChoreEarnings();
+        renderChoreEarnings();
+      });
+      chip.appendChild(btn);
+    }
+    wrap.appendChild(chip);
+  }
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : s;
+  return d.innerHTML;
+}
+
 function renderTodos() {
   const list = document.getElementById('todos-list');
   list.innerHTML = '';
-  if (!todos.length) {
+
+  const me = whoAmI();
+  const kind = todoKind();
+
+  // Unassigned items stay visible to everyone — "empty the dishwasher" with
+  // nobody's name on it is still the household's job, and hiding it would let
+  // shared work quietly disappear from every filtered view.
+  let visible = me
+    ? todos.filter(t => !t.people || !t.people.length || t.people.includes(me))
+    : todos;
+  if (kind === 'chores') visible = visible.filter(isChore);
+  else if (kind === 'todos') visible = visible.filter(t => !isChore(t));
+
+  if (!visible.length) {
     const empty = document.createElement('div');
     empty.id = 'todos-empty';
-    empty.textContent = 'No to-dos yet — add one above.';
+    const who = me ? ` for ${me}` : '';
+    empty.textContent =
+      kind === 'chores' ? `No chores${who} right now.` :
+      kind === 'todos'  ? `No to-dos${who} right now.` :
+      me ? `Nothing for ${me} right now.` : 'No to-dos yet — add one above.';
     list.appendChild(empty);
     return;
   }
-  for (const t of todos) {
+  for (const t of visible) {
     const row = document.createElement('div');
     row.className = 'todo-row' + (t.done ? ' done' : '');
 
@@ -3229,6 +3448,21 @@ function renderTodos() {
       row.appendChild(name);
     }
 
+    // Kids see money, never points. Points are the parent's dial for setting
+    // relative worth; "$0.75" is the thing that actually motivates a nine year
+    // old. With no rate set there is no money yet, so the badge stays off
+    // entirely rather than showing a meaningless $0.00.
+    const rateCents = (appConfig && appConfig.pointValueCents) || 0;
+    if (t.points > 0 && rateCents > 0) {
+      const val = document.createElement('div');
+      val.className = 'todo-points';
+      const sym = (appConfig && appConfig.currencySymbol) || '$';
+      val.textContent = `${sym}${((t.points * rateCents) / 100).toFixed(2)}`;
+      // The underlying points stay discoverable to a parent on hover.
+      val.title = `${t.points} point${t.points === 1 ? '' : 's'}`;
+      row.appendChild(val);
+    }
+
     if (t.due_date) {
       const due = document.createElement('div');
       due.className = 'todo-due';
@@ -3252,6 +3486,9 @@ async function toggleTodo(id, done) {
   await apiFetch(`/api/todos/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ done }) });
   await loadTodos();
   renderTodos();
+  // Checking a chore off is what mints points, so the balance has to move in
+  // the same beat — that immediate feedback is the whole motivation loop.
+  if (done) { await loadChoreEarnings(); renderChoreEarnings(); }
 }
 
 async function deleteTodo(id) {
@@ -3267,6 +3504,24 @@ function openTodoEditForm(todo) {
   document.getElementById('td-title').value = todo.title || '';
   document.getElementById('td-due').value = todo.due_date || '';
   document.getElementById('td-repeat').value = todo.recurring || '';
+  const ptsEl = document.getElementById('td-points');
+  ptsEl.value = todo.points ? String(todo.points) : '';
+  // Points are the parent's dial; the family only ever sees the money. Show the
+  // live conversion right here so setting a value doesn't require mental
+  // arithmetic against a rate buried in Settings.
+  const cents = (appConfig && appConfig.pointValueCents) || 0;
+  const sym = (appConfig && appConfig.currencySymbol) || '$';
+  const hint = document.getElementById('td-points-hint');
+  const updateHint = () => {
+    const n = Math.max(0, parseInt(ptsEl.value, 10) || 0);
+    hint.textContent = cents <= 0
+      ? '(set a point value in Settings to pay for chores)'
+      : n > 0
+        ? `= ${sym}${((n * cents) / 100).toFixed(2)}`
+        : `(${sym}${(cents / 100).toFixed(2)} per point)`;
+  };
+  ptsEl.oninput = updateHint;
+  updateHint();
   tdPeople = Array.isArray(todo.people) ? [...todo.people] : [];
   renderPersonChips('td-person-chips', tdPeople, NON_PERSON_NAMES);
   document.getElementById('todo-overlay').classList.add('open');
@@ -3290,6 +3545,7 @@ async function saveTodoEdit() {
     people: [...tdPeople],
     dueDate,
     recurring,
+    points: Math.max(0, parseInt(document.getElementById('td-points').value, 10) || 0),
   };
   const submitBtn = document.getElementById('td-submit');
   submitBtn.disabled = true;
@@ -3661,18 +3917,21 @@ async function init() {
     const repeatEl = document.getElementById('todo-add-repeat');
     const recurring = repeatEl.value || null;
     const dueDate = dueEl.value || (recurring ? toDateInputValue(new Date()) : null);
+    const pointsEl = document.getElementById('todo-add-points');
+    const points = Math.max(0, parseInt(pointsEl.value, 10) || 0);
     const submitBtn = e.target.querySelector('button[type=submit]');
     submitBtn.disabled = true;
     try {
       const res = await apiFetch('/api/todos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, people, dueDate, recurring }),
+        body: JSON.stringify({ title, people, dueDate, recurring, points }),
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); alert(err.error || 'Could not add to-do'); return; }
       titleEl.value = '';
       dueEl.value = '';
       repeatEl.value = '';
+      pointsEl.value = '';
       todoAddPeople = [];
       populateTodoPersonSelect();
       await loadTodos();
@@ -3680,6 +3939,23 @@ async function init() {
     } finally {
       submitBtn.disabled = false;
     }
+  });
+
+  // Whose chores this device shows. Persisted locally, so each phone/tablet
+  // keeps its own answer without any server-side notion of "current user".
+  document.getElementById('todo-whose').addEventListener('change', e => {
+    setWhoAmI(e.target.value);
+    renderTodos();
+    renderChoreEarnings();
+  });
+
+  document.getElementById('todo-kind').addEventListener('click', e => {
+    const btn = e.target.closest('.kind-btn');
+    if (!btn) return;
+    setTodoKind(btn.dataset.kind);
+    syncKindButtons();
+    renderTodos();
+    renderChoreEarnings();
   });
 
   document.getElementById('td-cancel').addEventListener('click', closeTodoEditForm);

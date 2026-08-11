@@ -8,6 +8,14 @@ password, your data stays on your own disk.
 ## Quick start
 
 ```sh
+docker run -d --name kinboard -p 3200:3000 \
+  -v kinboard-data:/app/data --restart unless-stopped \
+  raymondoooo/kinboard:latest
+```
+
+Also on GHCR as `ghcr.io/raymondoooo/kinboard`. Or from source:
+
+```sh
 cp .env.example .env
 docker compose up --build
 ```
@@ -120,7 +128,10 @@ yours to run, and your family's schedule never leaves your machine.
 
 - Month grid / agenda views, recurring events (including custom RRULE import), drag-free
   quick add
-- Meal planner and a chores/to-do list with repeat support
+- Meal planner, and a combined chore/to-do list with repeats, a per-device
+  "show me mine" filter, and **chore earnings** — give a chore a value and
+  Kinboard tracks what each person is owed, including every time a repeating
+  chore comes round
 - Live iCal feed subscriptions (school, sports, work) with automatic person/color detection
   from event titles
 - One-time calendar import (migrate off a live feed into native, editable events)
