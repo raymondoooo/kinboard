@@ -1,4 +1,5 @@
 const db = require('../db');
+const { isValidDate } = require('../validate');
 
 const MEAL_TYPES = new Set(['breakfast', 'lunch', 'dinner', 'snack']);
 
@@ -36,6 +37,11 @@ async function create(req, res) {
     return res.status(400).json({ error: 'mealType must be breakfast, lunch, dinner, or snack' });
   }
   const row = toRow(req.body);
+  // A meal saved onto a date that doesn't exist renders on no day at all, and
+  // can't be deleted from a grid it never appears in.
+  if (!isValidDate(row.date)) {
+    return res.status(400).json({ error: 'date must be a real calendar date in YYYY-MM-DD form' });
+  }
 
   const { data, error } = await db.from('meals').insert(row).select().single();
   if (error) return res.status(500).json({ error: error.message });
@@ -46,6 +52,9 @@ async function update(req, res) {
   const row = toRow(req.body);
   if (row.meal_type !== undefined && !MEAL_TYPES.has(row.meal_type)) {
     return res.status(400).json({ error: 'mealType must be breakfast, lunch, dinner, or snack' });
+  }
+  if (row.date !== undefined && !isValidDate(row.date)) {
+    return res.status(400).json({ error: 'date must be a real calendar date in YYYY-MM-DD form' });
   }
   if (Object.keys(row).length === 0) {
     return res.status(400).json({ error: 'no fields to update' });

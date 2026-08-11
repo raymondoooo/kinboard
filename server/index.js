@@ -16,7 +16,7 @@ const share = require('./routes/share');
 const meals = require('./routes/meals');
 const todos = require('./routes/todos');
 const { geocodeZip } = require('./geocode');
-const { THEMES, HEX_RE, cleanEmoji } = require('./validate');
+const { THEMES, HEX_RE, cleanEmoji, isValidDate, isValidTime } = require('./validate');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -303,9 +303,17 @@ function expandRruleRecurring(row, windowStart, windowEnd) {
   const hardEnd = (endsOn && endsOn < windowEnd) ? endsOn : windowEnd;
   const exdates = new Set((row.exdates || []).map(x => (typeof x === 'string' ? x.slice(0, 10) : fmtLocalDate(new Date(x)))));
 
-  // rrule.js handles its own iteration/UNTIL bounding internally — no manual
-  // step-guard loop needed here (unlike the legacy hand-rolled path below).
-  const occs = rule.between(windowStart, hardEnd, true);
+  // rrule.js bounds its own iteration by the window, but the window is 13
+  // months — long enough that a sub-hourly rule expands to hundreds of
+  // thousands of occurrences and hangs every calendar load. Writes are
+  // restricted to DAILY and coarser (isValidRrule), so this cap exists for rows
+  // that got in before that was enforced: without it such a row is unreachable
+  // to fix, because the page you'd fix it on is the page that won't load.
+  let taken = 0;
+  const occs = rule.between(windowStart, hardEnd, true, () => ++taken < MAX_OCCURRENCES_PER_EVENT);
+  if (taken >= MAX_OCCURRENCES_PER_EVENT) {
+    console.warn(`[rrule] event ${row.id} ("${row.title}") repeats too often — showing the first ${MAX_OCCURRENCES_PER_EVENT}`);
+  }
   const out = [];
   for (const occ of occs) {
     const key = fmtLocalDate(occ);
@@ -355,6 +363,85 @@ function expandRecurring(row, windowStart, windowEnd) {
 const ical = require('node-ical');
 const feedCache = new Map(); // feedId → { fetchedAt, events }
 const FEED_CACHE_TTL = 3 * 60 * 1000; // 3 min — how quickly source-calendar edits appear
+
+// Nothing about a subscribed calendar is trustworthy: it is third-party data,
+// fetched over the network, that we then expand and serialize. A single bad
+// VEVENT used to hang every calendar load permanently, and one high-frequency
+// RRULE could pin a CPU forever. These caps bound both.
+const FEED_MAX_BYTES = Math.max(1, Number(process.env.FEED_MAX_MB) || 10) * 1024 * 1024;
+const MAX_OCCURRENCES_PER_EVENT = 2000; // ~5.5 years of daily, well past the 13-month window
+const MAX_EVENTS_PER_FEED = 10000;
+
+// Cloud instance-metadata endpoints live on 169.254.169.254 and hand out
+// credentials to anything that can make an HTTP request from the host. No
+// calendar is ever hosted there, so refusing link-local costs nothing. Private
+// LAN ranges are deliberately NOT blocked — self-hosters legitimately subscribe
+// to a Nextcloud or Home Assistant on their own network, which is the point of
+// this product.
+function assertFetchableUrl(raw) {
+  let u;
+  try { u = new URL(raw); } catch { throw new Error('not a valid URL'); }
+  if (!/^https?:$/.test(u.protocol)) throw new Error('only http and https URLs are supported');
+  const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (host === 'metadata.google.internal' || /^169\.254\./.test(host) || /^fe80:/i.test(host)) {
+    throw new Error('that address is not allowed');
+  }
+}
+
+// Fetch the calendar ourselves rather than letting node-ical do it, so the
+// transfer is actually bounded. node-ical's fromURL has no size limit and no
+// abort, and the Promise.race "timeout" it used to be wrapped in only resolved
+// the *caller* — the real download kept running in the background.
+async function fetchIcsText(url, timeoutMs) {
+  assertFetchableUrl(url);
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      signal: ac.signal,
+      redirect: 'follow',
+      headers: { accept: 'text/calendar, text/plain;q=0.9, */*;q=0.8', 'user-agent': 'Kinboard' },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    // A redirect chain can land somewhere the original check would have
+    // rejected, so re-check where we actually ended up.
+    if (res.url && res.url !== url) assertFetchableUrl(res.url);
+
+    const declared = Number(res.headers.get('content-length'));
+    if (Number.isFinite(declared) && declared > FEED_MAX_BYTES) {
+      throw new Error(`calendar is too large (${Math.round(declared / 1048576)}MB)`);
+    }
+    // Content-Length is optional and can lie, so cap the stream as it arrives.
+    const reader = res.body && res.body.getReader ? res.body.getReader() : null;
+    if (!reader) return await res.text();
+    const chunks = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.length;
+      if (total > FEED_MAX_BYTES) {
+        await reader.cancel().catch(() => {});
+        throw new Error('calendar is too large');
+      }
+      chunks.push(value);
+    }
+    return Buffer.concat(chunks).toString('utf8');
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// node-ical leaves an unparseable DTSTART as the raw *string* it found rather
+// than failing, so `ev.start` is not necessarily a Date. One `DTSTART:TBD` in a
+// school-district feed was enough to throw inside the expansion loop and hang
+// every calendar load, permanently, for a household that had done nothing
+// wrong. Treat every date arriving off a feed as suspect.
+function asDate(v) {
+  if (!v || typeof v.getTime !== 'function') return null;
+  const t = v.getTime();
+  return Number.isFinite(t) ? v : null;
+}
 
 // Detect all-day events: node-ical sets dateOnly for VALUE=DATE type, but some
 // providers (TeamSnap, school districts) output midnight-UTC DATETIME instead.
@@ -558,8 +645,7 @@ async function fetchFeedEvents(feed, windowStart, windowEnd, memberColors = {}, 
 
   let data;
   try {
-    const timer = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
-    data = await Promise.race([ical.async.fromURL(feed.url), timer]);
+    data = await ical.async.parseICS(await fetchIcsText(feed.url, 8000));
   } catch (err) {
     console.error(`[feeds] fetch failed ${feed.url}: ${err.message}`);
     return cached ? cached.events : [];
@@ -593,12 +679,17 @@ async function fetchFeedEvents(feed, windowStart, windowEnd, memberColors = {}, 
   // edited-instance override). Re-attributes per event so a renamed override
   // (e.g. "Practice → Captains Practice") still colors correctly.
   function pushEvent(uid, src, startD, endD, allDay) {
-    const title = (src.summary || '').trim() || '(No title)';
-    const desc  = (src.description || '').trim();
+    // Last line of defence before serialization: a bogus TZID can still make
+    // fixRecurrence produce an Invalid Date, and toISOString() on one throws.
+    // Drop the occurrence rather than take the calendar down with it.
+    if (!asDate(startD)) return;
+    if (!asDate(endD)) endD = startD;
+    const title = (String(src.summary || '')).trim() || '(No title)';
+    const desc  = (String(src.description || '')).trim();
     const { people, color } = attribute(title, desc);
     events.push({
       uid, title, allDay, people, color, icon, category, feedId: feed.id,
-      location: src.location || '',
+      location: String(src.location || ''),
       start: allDay ? allDayStart(startD) : startD.toISOString(),
       end:   allDay ? allDayEnd(startD, endD) : endD.toISOString(),
     });
@@ -606,11 +697,22 @@ async function fetchFeedEvents(feed, windowStart, windowEnd, memberColors = {}, 
 
   for (const ev of Object.values(data)) {
     if (ev.type !== 'VEVENT') continue;
+    if (events.length >= MAX_EVENTS_PER_FEED) {
+      console.warn(`[feeds] ${feed.name || feed.url}: stopped at ${MAX_EVENTS_PER_FEED} events`);
+      break;
+    }
+
+    // One malformed VEVENT must not cost the household the other 300, nor the
+    // events on their other feeds, nor the ones they typed in themselves.
+    try {
     // node-ical exposes parsed dates as ev.start / ev.end (NOT ev.dtstart/dtend).
-    const allDay = detectAllDay(ev.start, ev.end);
+    const evStart = asDate(ev.start);
+    const evEnd   = asDate(ev.end);
+    if (!evStart) continue; // no usable date — nothing we could put on a calendar
+    const allDay = detectAllDay(evStart, evEnd);
 
     if (ev.rrule) {
-      const dur  = ev.end && ev.start ? ev.end.getTime() - ev.start.getTime() : 0;
+      const dur  = evEnd ? evEnd.getTime() - evStart.getTime() : 0;
       const tzid = ev.rrule.origOptions && ev.rrule.origOptions.tzid;
 
       // EXDATE: instances the user deleted from the series. node-ical parses these
@@ -635,7 +737,15 @@ async function fetchFeedEvents(feed, windowStart, windowEnd, memberColors = {}, 
         }
       }
 
-      const occs = ev.rrule.between(windowStart, windowEnd, true);
+      // Bounded expansion. `FREQ=MINUTELY` over the 13-month display window is
+      // ~570,000 occurrences: it pinned a core at 100% indefinitely, and every
+      // browser refresh started another one. rrule's iterator callback stops
+      // the walk at the cap instead of materializing the whole series first.
+      let taken = 0;
+      const occs = ev.rrule.between(windowStart, windowEnd, true, () => ++taken < MAX_OCCURRENCES_PER_EVENT);
+      if (taken >= MAX_OCCURRENCES_PER_EVENT) {
+        console.warn(`[feeds] ${feed.name || feed.url}: "${ev.summary || ev.uid}" repeats too often — showing the first ${MAX_OCCURRENCES_PER_EVENT}`);
+      }
       for (const rawOcc of occs) {
         // Correct node-ical's rrule timezone shift (all-day stays date-anchored).
         const occ = allDay ? rawOcc : fixRecurrence(rawOcc, tzid);
@@ -652,21 +762,26 @@ async function fetchFeedEvents(feed, windowStart, windowEnd, memberColors = {}, 
       if (ev.recurrences) {
         for (const k of Object.keys(ev.recurrences)) {
           const r = ev.recurrences[k];
-          if (!r || !r.start) continue;
+          if (!r) continue;
+          const rStart = asDate(r.start);
+          if (!rStart) continue;
           if ((r.status || '').toUpperCase() === 'CANCELLED') continue;
-          const rAllDay = detectAllDay(r.start, r.end);
-          const rEnd = r.end || r.start;
-          if (r.start <= windowEnd && rEnd >= windowStart) {
-            pushEvent(`f${feed.id}-${ev.uid || ''}-ovr-${r.start.getTime()}`, r, r.start, rEnd, rAllDay);
+          const rEnd = asDate(r.end) || rStart;
+          const rAllDay = detectAllDay(rStart, asDate(r.end));
+          if (rStart <= windowEnd && rEnd >= windowStart) {
+            pushEvent(`f${feed.id}-${ev.uid || ''}-ovr-${rStart.getTime()}`, r, rStart, rEnd, rAllDay);
           }
         }
       }
-    } else if (ev.start) {
-      const s = ev.start;
-      const e = ev.end || ev.start;
+    } else {
+      const s = evStart;
+      const e = evEnd || evStart;
       if (s <= windowEnd && e >= windowStart) {
         pushEvent(`f${feed.id}-${ev.uid || ''}`, ev, s, e, allDay);
       }
+    }
+    } catch (err) {
+      console.error(`[feeds] skipped a bad event in ${feed.name || feed.url}: ${err.message}`);
     }
   }
 
@@ -690,22 +805,6 @@ function isValidRrule(s) {
 // the row inserted fine, then formatting the response threw, which crashed the
 // process — and because the row was already committed, every subsequent
 // calendar load crashed too. One bad value permanently bricked the instance.
-const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
-const HMS_RE = /^\d{2}:\d{2}(:\d{2})?$/;
-
-function isValidDate(s) {
-  if (typeof s !== 'string' || !YMD_RE.test(s)) return false;
-  const d = new Date(s + 'T00:00:00');
-  // Rejects both unparseable strings and impossible dates that Date happily
-  // rolls over (2026-02-30 becoming March 2nd).
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
-}
-function isValidTime(s) {
-  if (typeof s !== 'string' || !HMS_RE.test(s)) return false;
-  const [h, m, sec] = s.split(':').map(Number);
-  return h >= 0 && h <= 23 && m >= 0 && m <= 59 && (sec === undefined || (sec >= 0 && sec <= 59));
-}
-
 function toRow(body) {
   const row = {};
   if (body.title !== undefined) row.title = body.title;
@@ -840,7 +939,19 @@ app.get('/api/events', requireViewAccess, async (req, res) => {
     else personNames.push(m.display_name);
   }
 
-  const feedArrays = await Promise.all((feeds || []).map(f => fetchFeedEvents(f, windowStart, windowEnd, memberColors, personNames, categoryNames)));
+  // Per-feed isolation. Promise.all rejects as a whole, so before this a single
+  // throwing feed didn't just hide its own events — it took out the entire
+  // calendar including the family's own hand-entered ones, and (being an
+  // unhandled rejection in an Express 4 async handler) left the request hanging
+  // with no response at all rather than failing visibly.
+  const feedArrays = await Promise.all((feeds || []).map(async (f) => {
+    try {
+      return await fetchFeedEvents(f, windowStart, windowEnd, memberColors, personNames, categoryNames);
+    } catch (err) {
+      console.error(`[feeds] ${f.name || f.url} failed entirely: ${err.stack || err.message}`);
+      return [];
+    }
+  }));
 
   const selectedHolidays = Array.isArray(settings.holidays) ? settings.holidays : [];
   const holidayEvents    = generateHolidayEvents(selectedHolidays, memberColors['Holiday'] || '#f59e0b', windowStart, windowEnd);
@@ -1092,6 +1203,9 @@ app.get('/api/feeds', auth.requireAuth, async (req, res) => {
 app.post('/api/feeds', auth.requireAuth, async (req, res) => {
   const url = (req.body.url || '').trim();
   if (!/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'Valid url required' });
+  // Reject here as well as at fetch time, so a bad address fails while someone
+  // is looking at the form rather than silently never syncing.
+  try { assertFetchableUrl(url); } catch (err) { return res.status(400).json({ error: err.message }); }
   const person = (req.body.person || req.body.member || '').trim().slice(0, 30) || null;
   let label = (req.body.label || '').trim().slice(0, 60);
   if (!label) { try { label = new URL(url).hostname; } catch { label = 'Calendar'; } }
@@ -1115,7 +1229,9 @@ app.post('/api/feeds', auth.requireAuth, async (req, res) => {
 app.patch('/api/feeds/:id', auth.requireAuth, async (req, res) => {
   const update = {};
   if (typeof req.body.url === 'string' && /^https?:\/\//i.test(req.body.url.trim())) {
-    update.url = req.body.url.trim();
+    const u = req.body.url.trim();
+    try { assertFetchableUrl(u); } catch (err) { return res.status(400).json({ error: err.message }); }
+    update.url = u;
   }
   if (typeof req.body.label === 'string') {
     const l = req.body.label.trim().slice(0, 60);
@@ -1187,8 +1303,7 @@ app.post('/api/feeds/import', auth.requireAuth, async (req, res) => {
 
   let data;
   try {
-    const timer = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 20000));
-    data = await Promise.race([ical.async.fromURL(url), timer]);
+    data = await ical.async.parseICS(await fetchIcsText(url, 20000));
   } catch (err) {
     return res.status(502).json({ error: `Could not fetch calendar: ${err.message}` });
   }
@@ -1212,13 +1327,21 @@ app.post('/api/feeds/import', auth.requireAuth, async (req, res) => {
   const seriesRows = [];
   const singleRows = [];
 
+  let skipped = 0;
   for (const ev of Object.values(data)) {
     if (ev.type !== 'VEVENT') continue;
-    const allDay = detectAllDay(ev.start, ev.end);
-    const title  = (ev.summary || '').trim() || '(No title)';
-    const desc   = (ev.description || '').trim();
+    // Same rule as the live-feed path: dates off a calendar are untrusted, and
+    // here a bad one would be written into our own events table rather than
+    // just misrendered once.
+    try {
+    const evStart = asDate(ev.start);
+    const evEnd   = asDate(ev.end);
+    if (!evStart) { skipped++; continue; }
+    const allDay = detectAllDay(evStart, evEnd);
+    const title  = (String(ev.summary || '')).trim() || '(No title)';
+    const desc   = (String(ev.description || '')).trim();
     const person = attributePerson(title, desc);
-    const location = ev.location || '';
+    const location = String(ev.location || '');
 
     if (ev.rrule) {
       // Extract just the RRULE value — DTSTART is re-derived from our own
@@ -1227,7 +1350,16 @@ app.post('/api/feeds/import', auth.requireAuth, async (req, res) => {
       const full = ev.rrule.toString();
       const idx = full.indexOf('RRULE:');
       const ruleText = idx >= 0 ? full.slice(idx + 'RRULE:'.length) : null;
-      if (!ruleText) continue; // malformed — skip rather than insert an unexpandable row
+      if (!ruleText) { skipped++; continue; } // malformed — skip rather than insert an unexpandable row
+      // Hold imported rules to exactly the same standard as typed ones. This
+      // path used to write whatever the calendar said straight into our events
+      // table, so an ICS carrying FREQ=MINUTELY became a permanent row that
+      // hung every calendar load — with no feed left to unsubscribe from.
+      if (!isValidRrule(ruleText)) {
+        skipped++;
+        console.warn(`[import] skipped "${title}" — unsupported repeat rule: ${ruleText}`);
+        continue;
+      }
 
       const exdateKeys = new Set();
       if (ev.exdate) {
@@ -1244,43 +1376,67 @@ app.post('/api/feeds/import', auth.requireAuth, async (req, res) => {
           if (!r || !r.recurrenceid) continue;
           exdateKeys.add(importDateKey(r.recurrenceid, allDay, timeZone)); // suppress base occurrence either way
           if ((r.status || '').toUpperCase() === 'CANCELLED') continue; // pure deletion, no replacement row
-          const rAllDay = detectAllDay(r.start, r.end);
-          const rTitle  = (r.summary || title).trim() || '(No title)';
+          const rStart = asDate(r.start);
+          if (!rStart) { skipped++; continue; }
+          const rEnd    = asDate(r.end) || rStart;
+          const rAllDay = detectAllDay(rStart, asDate(r.end));
+          const rTitle  = (String(r.summary || title)).trim() || '(No title)';
           overrides.push({
             title: rTitle,
-            date: importDateKey(r.start, rAllDay, timeZone),
+            date: importDateKey(rStart, rAllDay, timeZone),
             all_day: rAllDay,
-            start_time: rAllDay ? null : wallClockParts(r.start, timeZone).time,
-            end_time:   rAllDay ? null : wallClockParts(r.end || r.start, timeZone).time,
-            location: r.location || location,
-            people: toPeopleArray(attributePerson(rTitle, (r.description || '').trim())),
+            start_time: rAllDay ? null : wallClockParts(rStart, timeZone).time,
+            end_time:   rAllDay ? null : wallClockParts(rEnd, timeZone).time,
+            location: String(r.location || location),
+            people: toPeopleArray(attributePerson(rTitle, (String(r.description || '')).trim())),
           });
         }
       }
 
       seriesRows.push({
         title,
-        date: importDateKey(ev.start, allDay, timeZone),
+        date: importDateKey(evStart, allDay, timeZone),
         all_day: allDay,
-        start_time: allDay ? null : wallClockParts(ev.start, timeZone).time,
-        end_time:   allDay ? null : wallClockParts(ev.end || ev.start, timeZone).time,
+        start_time: allDay ? null : wallClockParts(evStart, timeZone).time,
+        end_time:   allDay ? null : wallClockParts(evEnd || evStart, timeZone).time,
         location, people: toPeopleArray(person),
         rrule: ruleText,
-        exdates: Array.from(exdateKeys),
+        // Drop unusable exdates individually — one bad EXDATE shouldn't cost
+        // the household the entire series it belongs to.
+        exdates: Array.from(exdateKeys).filter(isValidDate),
         overrides,
       });
-    } else if (ev.start) {
-      const key = importDateKey(ev.start, allDay, timeZone);
-      if (rangeStart && ev.start < rangeStart) continue;
-      if (rangeEnd && ev.start > rangeEnd) continue;
+    } else {
+      const key = importDateKey(evStart, allDay, timeZone);
+      if (rangeStart && evStart < rangeStart) continue;
+      if (rangeEnd && evStart > rangeEnd) continue;
       singleRows.push({
         title, date: key, all_day: allDay,
-        start_time: allDay ? null : wallClockParts(ev.start, timeZone).time,
-        end_time:   allDay ? null : wallClockParts(ev.end || ev.start, timeZone).time,
+        start_time: allDay ? null : wallClockParts(evStart, timeZone).time,
+        end_time:   allDay ? null : wallClockParts(evEnd || evStart, timeZone).time,
         location, people: toPeopleArray(person),
       });
     }
+    } catch (err) {
+      skipped++;
+      console.error(`[import] skipped a bad event: ${err.message}`);
+    }
   }
+
+  // Nothing goes into the events table that the API itself would reject. An
+  // imported row lives on forever and is read on every calendar load, so a
+  // malformed one is far more expensive than a skipped one.
+  for (const list of [seriesRows, singleRows]) {
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (validateEventRow(list[i])) { list.splice(i, 1); skipped++; }
+    }
+  }
+  for (const s of seriesRows) {
+    const before = s.overrides.length;
+    s.overrides = s.overrides.filter(o => !validateEventRow(o));
+    skipped += before - s.overrides.length;
+  }
+  if (skipped) console.warn(`[import] skipped ${skipped} unusable event(s) from ${url}`);
 
   const overrideCount = seriesRows.reduce((n, s) => n + s.overrides.length, 0);
 
@@ -1291,6 +1447,7 @@ app.post('/api/feeds/import', auth.requireAuth, async (req, res) => {
       seriesCount: seriesRows.length,
       singleCount: singleRows.length,
       overrideCount,
+      skipped,
       sample,
     });
   }
@@ -1330,7 +1487,7 @@ app.post('/api/feeds/import', auth.requireAuth, async (req, res) => {
     removedFeed = !delErr;
   }
 
-  res.json({ ok: true, dryRun: false, insertedSeries, insertedSingles, insertedOverrides, removedFeed });
+  res.json({ ok: true, dryRun: false, insertedSeries, insertedSingles, insertedOverrides, skipped, removedFeed });
 });
 
 // ── Calendar settings ──

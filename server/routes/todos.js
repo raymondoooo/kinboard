@@ -1,7 +1,16 @@
 const crypto = require('crypto');
 const db = require('../db');
+const { isValidDate } = require('../validate');
 
 const RECUR_PATTERNS = new Set(['daily', 'weekly', 'monthly']);
+
+// A garbage due date doesn't just render wrong — for a repeating chore it is
+// the anchor nextDueDate() advances from, so one bad value corrupts every
+// future occurrence of that chore.
+function badDueDate(row) {
+  if (row.due_date === undefined || row.due_date === null) return null;
+  return isValidDate(row.due_date) ? null : 'dueDate must be a real calendar date in YYYY-MM-DD form';
+}
 
 // Whitelist + coerce a request body into a `todos` row. Shared by
 // create/update so both reject the same bad input the same way.
@@ -84,6 +93,8 @@ async function create(req, res) {
     return res.status(400).json({ error: 'title is required' });
   }
   const row = toRow(req.body);
+  const bad = badDueDate(row);
+  if (bad) return res.status(400).json({ error: bad });
   delete row.done;
   delete row.completed_at; // new todos always start open
   // A repeat pattern needs an anchor date to advance from — default to today
@@ -101,6 +112,8 @@ async function update(req, res) {
   if (Object.keys(row).length === 0) {
     return res.status(400).json({ error: 'no fields to update' });
   }
+  const bad = badDueDate(row);
+  if (bad) return res.status(400).json({ error: bad });
 
   // Checking off a recurring to-do advances it to its next due date instead
   // of marking it permanently done — chores repeat, they don't finish.

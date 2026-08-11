@@ -68,6 +68,60 @@ jobs:
           [ "$code" = "401" ] || { echo "expected 401 for bad password, got $code"; exit 1; }
           echo "first-run flow OK"
 
+      - name: A hostile calendar feed must not take down the calendar
+        run: |
+          set -e
+          B=http://localhost:3000
+          curl -fsS -c /tmp/j -X POST "$B/api/login" \
+            -H 'Content-Type: application/json' -d '{"password":"ci-password-123"}' >/dev/null
+
+          # Served from the runner; the container reaches it on the bridge gateway.
+          mkdir -p /tmp/ics && cd /tmp/ics
+          # A real school-district feed emitted DTSTART:TBD. node-ical leaves an
+          # unparseable date as a plain string, which threw inside expansion and
+          # left every /api/events request hanging forever with no response.
+          printf 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:ok\r\nDTSTART:20300815T140000Z\r\nDTEND:20300815T150000Z\r\nSUMMARY:Good event\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:bad\r\nDTSTART:TBD\r\nDTEND:TBD\r\nSUMMARY:Bad event\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n' > bad.ics
+          # FREQ=MINUTELY over the 13-month display window is ~570k occurrences:
+          # it pinned a CPU at 100% indefinitely, once per browser refresh.
+          printf 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:flood\r\nDTSTART:20300101T000000Z\r\nDTEND:20300101T000100Z\r\nRRULE:FREQ=MINUTELY;INTERVAL=1\r\nSUMMARY:Flood\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n' > flood.ics
+          python3 -m http.server 8899 --bind 0.0.0.0 >/dev/null 2>&1 &
+          sleep 1
+          GW=$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}')
+          [ -n "$GW" ] || { echo "FAIL: could not determine the bridge gateway address"; exit 1; }
+
+          for f in bad flood; do
+            curl -fsS -b /tmp/j -X POST "$B/api/feeds" -H 'Content-Type: application/json' \
+              -d "{\"url\":\"http://$GW:8899/$f.ics\",\"label\":\"$f\"}" >/dev/null
+          done
+
+          # Must answer promptly, and the sane event on the broken feed must survive.
+          code=$(curl -s -m 30 -o /tmp/ev.json -w '%{http_code}' -b /tmp/j "$B/api/events")
+          [ "$code" = "200" ] || { echo "FAIL: /api/events returned $code with a hostile feed attached"; exit 1; }
+          grep -q 'Good event' /tmp/ev.json || { echo "FAIL: one bad VEVENT suppressed the rest of its feed"; exit 1; }
+          grep -q 'CI event' /tmp/ev.json || { echo "FAIL: a bad feed suppressed the household's own events"; exit 1; }
+
+          # Importing that rule would persist it into our own events table, where
+          # there is no feed left to unsubscribe from.
+          curl -fsS -b /tmp/j -X POST "$B/api/feeds/import" -H 'Content-Type: application/json' \
+            -d "{\"url\":\"http://$GW:8899/flood.ics\",\"dryRun\":true}" | grep -q '"seriesCount":0' \
+            || { echo "FAIL: import accepted a sub-hourly repeat rule"; exit 1; }
+
+          # Cloud instance metadata must be unreachable via a feed URL.
+          code=$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/j -X POST "$B/api/feeds" \
+            -H 'Content-Type: application/json' \
+            -d '{"url":"http://169.254.169.254/latest/meta-data/","label":"metadata"}')
+          [ "$code" = "400" ] || { echo "FAIL: feed URL reached link-local metadata (got $code)"; exit 1; }
+
+          docker inspect -f '{{.State.Status}}' kinboard-ci | grep -q running \
+            || { echo "FAIL: container is not running"; exit 1; }
+
+          # Leave no feeds behind: the URLs stop resolving when this step ends,
+          # and later steps shouldn't pay their fetch timeouts.
+          for id in $(curl -fsS -b /tmp/j "$B/api/feeds" | grep -o '"id":"[^"]*"' | cut -d'"' -f4); do
+            curl -fsS -b /tmp/j -X DELETE "$B/api/feeds/$id" >/dev/null
+          done
+          echo "hostile feeds contained"
+
       - name: Login rate limit must not be bypassable via X-Forwarded-For
         run: |
           set -e
