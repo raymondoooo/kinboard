@@ -35,6 +35,17 @@ assumptions worth being explicit about:
   if a link gets out.
 - **Your data is a plain SQLite file** in the data volume, unencrypted. Disk
   encryption and backup security are yours to arrange.
+- **A subscribed calendar is untrusted input.** Kinboard fetches feed URLs from
+  the server, so anyone who can add a feed can make your server issue an HTTP
+  request. Link-local metadata addresses (`169.254.0.0/16`) are refused;
+  private LAN addresses are deliberately allowed, because subscribing to
+  something on your own network is a normal thing to want. Feed downloads are
+  capped at 10MB (`FEED_MAX_MB`) and repeat rules are capped at 2,000
+  occurrences per event, so a hostile or broken calendar can't exhaust memory
+  or CPU.
+- **Complete setup immediately.** Until you do, an instance has no password and
+  whoever reaches the port first becomes its owner. The container says so at
+  boot.
 
 ## Things that are not vulnerabilities
 

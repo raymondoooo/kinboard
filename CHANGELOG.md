@@ -5,6 +5,45 @@ means the shape of things can still change between minor releases.
 
 ## [Unreleased]
 
+### Fixed
+- **One malformed event in a subscribed calendar killed the whole calendar.**
+  A feed containing an unparseable date (a real school-district feed emitted
+  `DTSTART:TBD`) threw during expansion, and because that happens inside an
+  async handler the request never got a response at all — the page just spun,
+  on every load, permanently, until the feed was removed. The Docker
+  healthcheck reported `healthy` the entire time. Feeds are now isolated from
+  each other and from your own events: a bad event is skipped and the rest of
+  that feed still shows.
+- **A high-frequency repeat rule could pin the CPU indefinitely.**
+  `FREQ=MINUTELY` expands to ~570,000 occurrences across the display window,
+  and every browser refresh started another expansion. Expansion is now capped
+  per event.
+- **Importing a calendar could permanently break the instance.** The import
+  path wrote whatever repeat rule the calendar carried straight into the
+  database, bypassing the validation applied to rules you type. Such a row hung
+  every page load with no feed left to unsubscribe from. Imported rules are now
+  held to the same standard, and an already-affected instance recovers by
+  upgrading.
+- **Calendar downloads are now bounded.** No size limit and no working timeout
+  meant a large or slow URL could tie up memory and a request indefinitely.
+  Capped at 10MB (`FEED_MAX_MB`), with a real abort.
+- **Feed URLs can no longer reach cloud instance metadata**
+  (`169.254.169.254`), which hands out host credentials to anything that can
+  make an HTTP request. Private LAN addresses are still allowed — subscribing
+  to your own Nextcloud is the point of self-hosting.
+- **Changing the household password now signs out other devices.** Only the
+  password hash was being replaced, so existing session cookies kept working —
+  including the one belonging to whoever you changed the password because of.
+  Settings claimed otherwise.
+- **A malformed date could crash the container and keep it crashing.** An event
+  posted with an invalid date was stored, then threw while being formatted for
+  display, taking the process down — and the stored row crashed it again on
+  every subsequent load. Dates are validated on write and tolerated on read,
+  and the process no longer exits on an unhandled rejection.
+- `/api/setup` is rate limited, and an instance left un-set-up now says so
+  loudly at boot: until you complete setup, whoever reaches the port first can
+  claim it.
+
 ## [0.2.0]
 
 ### Added
