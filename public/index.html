@@ -3299,8 +3299,11 @@ async function loadChoreEarnings() {
   } catch (_) { choreEarnings = null; }
 }
 
+// The currency symbol is user-set and this string lands in innerHTML on the
+// earnings chips. It's capped at 4 characters server-side so it can't carry a
+// working payload, but escaping costs nothing and removes the question entirely.
 function money(cents) {
-  const sym = (choreEarnings && choreEarnings.currencySymbol) || '$';
+  const sym = escapeHtml((choreEarnings && choreEarnings.currencySymbol) || '$');
   return `${sym}${(cents / 100).toFixed(2)}`;
 }
 
