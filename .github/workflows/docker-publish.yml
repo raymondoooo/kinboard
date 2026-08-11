@@ -77,13 +77,17 @@ jobs:
 
           # Served from the runner; the container reaches it on the bridge gateway.
           mkdir -p /tmp/ics && cd /tmp/ics
+          # Feed events are filtered to the display window (-1 month to +1 year),
+          # so these have to be dated relative to now or the test would pass for
+          # the wrong reason once the hardcoded date fell out of range.
+          SOON=$(date -u -d '+30 days' +%Y%m%d)
           # A real school-district feed emitted DTSTART:TBD. node-ical leaves an
           # unparseable date as a plain string, which threw inside expansion and
           # left every /api/events request hanging forever with no response.
-          printf 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:ok\r\nDTSTART:20300815T140000Z\r\nDTEND:20300815T150000Z\r\nSUMMARY:Good event\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:bad\r\nDTSTART:TBD\r\nDTEND:TBD\r\nSUMMARY:Bad event\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n' > bad.ics
+          printf 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:ok\r\nDTSTART:%sT140000Z\r\nDTEND:%sT150000Z\r\nSUMMARY:Good event\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:bad\r\nDTSTART:TBD\r\nDTEND:TBD\r\nSUMMARY:Bad event\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n' "$SOON" "$SOON" > bad.ics
           # FREQ=MINUTELY over the 13-month display window is ~570k occurrences:
           # it pinned a CPU at 100% indefinitely, once per browser refresh.
-          printf 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:flood\r\nDTSTART:20300101T000000Z\r\nDTEND:20300101T000100Z\r\nRRULE:FREQ=MINUTELY;INTERVAL=1\r\nSUMMARY:Flood\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n' > flood.ics
+          printf 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:flood\r\nDTSTART:%sT000000Z\r\nDTEND:%sT000100Z\r\nRRULE:FREQ=MINUTELY;INTERVAL=1\r\nSUMMARY:Flood\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n' "$SOON" "$SOON" > flood.ics
           python3 -m http.server 8899 --bind 0.0.0.0 >/dev/null 2>&1 &
           sleep 1
           GW=$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}')
