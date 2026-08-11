@@ -87,9 +87,15 @@ jobs:
 
       - name: App must run as a non-root user
         run: |
-          u=$(docker exec kinboard-ci ps -o user= -p 1 | tr -d ' ')
-          [ "$u" != "root" ] || { echo "FAIL: app runs as root"; exit 1; }
-          echo "app runs as: $u"
+          # Read the numeric uid of PID 1 from /proc rather than parsing `ps`.
+          # busybox's ps ignores `-o user= -p 1` and returns an empty string,
+          # which made `[ "$u" != "root" ]` pass vacuously — the check would have
+          # stayed green even if the app were running as root. Fail loudly if the
+          # value can't be read at all.
+          uid=$(docker exec kinboard-ci awk '/^Uid:/{print $2}' /proc/1/status)
+          [ -n "$uid" ] || { echo "FAIL: could not read uid of PID 1"; exit 1; }
+          [ "$uid" != "0" ] || { echo "FAIL: app runs as root (uid 0)"; exit 1; }
+          echo "app runs as uid $uid ($(docker exec kinboard-ci id -nu "$uid" 2>/dev/null || echo unknown))"
 
       - name: Runtime image must not ship a build toolchain
         run: |
