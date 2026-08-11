@@ -30,6 +30,10 @@ COPY package.json ./
 COPY server ./server
 COPY public ./public
 COPY schema.sql ./schema.sql
+# Migration/maintenance tooling ships with the image so it can be run with
+# `docker exec kinboard node scripts/...` — someone moving their data in
+# shouldn't have to clone the repo to do it.
+COPY scripts ./scripts
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
