@@ -51,8 +51,25 @@ if (TRUST_PROXY) {
   app.set('trust proxy', TRUST_PROXY === 'true' ? true : (Number.isInteger(n) ? n : TRUST_PROXY));
 }
 
+// A self-hosted family calendar should degrade, not die. Express 4 does not
+// forward rejected promises from async handlers, and Node kills the process on
+// an unhandled rejection by default — so a single unexpected throw in any of
+// the async routes would take everyone's calendar offline until someone
+// noticed. Log loudly and keep serving instead.
+process.on('unhandledRejection', (err) => {
+  console.error('[fatal-guard] unhandled rejection (staying up):', err && err.stack || err);
+});
+// An uncaught exception leaves state genuinely unknown, so exit and let Docker
+// restart cleanly rather than serving from a corrupt process.
+process.on('uncaughtException', (err) => {
+  console.error('[fatal-guard] uncaught exception (restarting):', err && err.stack || err);
+  process.exit(1);
+});
+
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
-app.use(express.json());
+// Explicit cap. Every payload here is a handful of fields; a limit keeps a
+// single large POST from becoming a memory problem.
+app.use(express.json({ limit: '256kb' }));
 app.use(cookieParser());
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.path}`);
@@ -101,7 +118,12 @@ app.get('/api/health', (req, res) => {
 });
 
 // ── Setup / login / logout ──
-app.post('/api/setup', auth.setupHandler);
+// Setup is necessarily unauthenticated — it is where the first credential gets
+// created. Rate-limited anyway, and see the boot warning below: an instance
+// left un-set-up on a reachable network can be claimed by whoever finds it
+// first. That is a property of first-run setup in general, not something this
+// endpoint can solve on its own, so the mitigation is telling the operator.
+app.post('/api/setup', rateLimit({ max: 10, windowMs: 5 * 60 * 1000 }), auth.setupHandler);
 app.post('/api/login', rateLimit({ max: 10, windowMs: 5 * 60 * 1000 }), auth.loginHandler);
 app.post('/api/logout', auth.logoutHandler);
 app.post('/api/account/password', auth.requireAuth, auth.changePasswordHandler);
@@ -149,7 +171,15 @@ function toClientEvent(row) {
     start = date + 'T00:00:00';
     const d = new Date(date + 'T00:00:00');
     d.setDate(d.getDate() + 1);
-    end = d.toISOString().slice(0, 10) + 'T00:00:00';
+    // Defensive: input validation should make this unreachable, but a database
+    // written by an older build may already hold an unparseable date. Throwing
+    // here would take the whole calendar down for everyone rather than spoiling
+    // one row, so degrade instead — the bad event renders oddly and stays
+    // editable, which is recoverable. This is the difference between one broken
+    // row and an instance that crash-loops on every load.
+    end = Number.isNaN(d.getTime())
+      ? start
+      : d.toISOString().slice(0, 10) + 'T00:00:00';
   } else {
     start = `${date}T${row.start_time}`;
     end   = `${date}T${row.end_time || row.start_time}`;
@@ -654,6 +684,28 @@ function isValidRrule(s) {
 }
 
 // Map an incoming request body to DB columns (only defined fields).
+// Dates and times are stored as bare strings and later fed to `new Date()`, so
+// anything that isn't a real calendar value has to be rejected at the door.
+// A single unparseable date used to be catastrophic rather than merely wrong:
+// the row inserted fine, then formatting the response threw, which crashed the
+// process — and because the row was already committed, every subsequent
+// calendar load crashed too. One bad value permanently bricked the instance.
+const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+const HMS_RE = /^\d{2}:\d{2}(:\d{2})?$/;
+
+function isValidDate(s) {
+  if (typeof s !== 'string' || !YMD_RE.test(s)) return false;
+  const d = new Date(s + 'T00:00:00');
+  // Rejects both unparseable strings and impossible dates that Date happily
+  // rolls over (2026-02-30 becoming March 2nd).
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+function isValidTime(s) {
+  if (typeof s !== 'string' || !HMS_RE.test(s)) return false;
+  const [h, m, sec] = s.split(':').map(Number);
+  return h >= 0 && h <= 23 && m >= 0 && m <= 59 && (sec === undefined || (sec >= 0 && sec <= 59));
+}
+
 function toRow(body) {
   const row = {};
   if (body.title !== undefined) row.title = body.title;
@@ -679,6 +731,26 @@ function toRow(body) {
     row.share_override = (body.shareOverride === 'always' || body.shareOverride === 'never') ? body.shareOverride : null;
   }
   return row;
+}
+
+// Reject anything date-shaped that isn't a real date, before it reaches the
+// database. Returns an error string, or null when the row is safe to store.
+function validateEventRow(row) {
+  if (row.date !== undefined && !isValidDate(row.date)) {
+    return 'date must be a real calendar date in YYYY-MM-DD form';
+  }
+  if (row.ends_on !== undefined && row.ends_on !== null && !isValidDate(row.ends_on)) {
+    return 'endsOn must be a real calendar date in YYYY-MM-DD form';
+  }
+  for (const [field, val] of [['startTime', row.start_time], ['endTime', row.end_time]]) {
+    if (val !== undefined && val !== null && !isValidTime(val)) {
+      return `${field} must be in HH:MM or HH:MM:SS form`;
+    }
+  }
+  if (row.exdates !== undefined && Array.isArray(row.exdates) && !row.exdates.every(isValidDate)) {
+    return 'exdates must all be real calendar dates';
+  }
+  return null;
 }
 
 // Config: colors come from members; layout/theme from the settings row.
@@ -783,6 +855,8 @@ app.post('/api/events', auth.requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'title and date are required' });
   }
   const row = toRow(req.body);
+  const invalid = validateEventRow(row);
+  if (invalid) return res.status(400).json({ error: invalid });
   if (row.all_day === undefined) row.all_day = true;
   if (row.rrule) {
     if (!isValidRrule(row.rrule)) return res.status(400).json({ error: 'Invalid recurrence rule' });
@@ -807,6 +881,8 @@ app.patch('/api/events/:id', auth.requireAuth, async (req, res) => {
   if (Object.keys(row).length === 0) {
     return res.status(400).json({ error: 'no fields to update' });
   }
+  const invalidPatch = validateEventRow(row);
+  if (invalidPatch) return res.status(400).json({ error: invalidPatch });
 
   // Edit ONE occurrence of a recurring series: detach it as an independent,
   // non-recurring event on that date and add the original date to the master's
@@ -1464,6 +1540,30 @@ notify.schedule();
 // setup-gating, so index isn't auto-served here.
 app.use(express.static(path.join(__dirname, '..', 'public'), { index: false }));
 
+// Last-resort error handler. Catches synchronous throws from any route (and
+// malformed JSON bodies, which express.json rejects) so the client gets a clean
+// 500 instead of a hung request. Must be registered after everything else, and
+// must keep all four arguments — Express identifies error handlers by arity.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error(`[error] ${req.method} ${req.path}:`, err && err.stack || err);
+  if (res.headersSent) return;
+  const status = err && (err.status || err.statusCode);
+  if (status === 400 && err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'Malformed JSON body' });
+  }
+  if (status === 413) return res.status(413).json({ error: 'Request body too large' });
+  res.status(500).json({ error: 'Something went wrong. Check the server logs.' });
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`kinboard server running on port ${PORT}`);
+  // Until setup is completed, anyone who can reach this port can complete it
+  // and own the calendar. Nothing the server can do about that — it's the
+  // nature of first-run setup — but an operator who knows should finish it now
+  // rather than leaving it open on a reachable network.
+  if (!auth.isSetUp()) {
+    console.log('[setup] NOT YET CONFIGURED — open this instance and complete setup now.');
+    console.log('[setup] Until you do, anyone who can reach this port can claim it.');
+  }
 });
