@@ -1357,6 +1357,18 @@
     background: var(--surface-2); border: 1px solid var(--hairline); color: var(--text);
     border-radius: 8px; padding: 5px 10px; font-size: 0.85rem; min-height: 32px;
   }
+  /* Segmented control — one row instead of a fourth tab. The chore/to-do line
+     is fuzzy, so this filters an existing list rather than forcing people to
+     categorise anything when they add an item. */
+  #todo-kind { display: inline-flex; background: var(--surface-2); border: 1px solid var(--hairline); border-radius: 999px; padding: 2px; }
+  .kind-btn {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 0.78rem; font-weight: 600; padding: 5px 12px; border-radius: 999px;
+    min-height: 30px; white-space: nowrap; transition: background 0.12s, color 0.12s;
+  }
+  .kind-btn:hover { color: var(--text); }
+  .kind-btn.active { background: var(--accent); color: #053038; }
+
   #chore-earnings { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
   .earn-chip {
     display: inline-flex; align-items: center; gap: 6px;
@@ -1633,8 +1645,13 @@
     #meal-modal { width: 95%; padding: 16px; }
     #todo-modal { width: 95%; padding: 16px; }
     #todo-add-form { padding: 10px; }
-    #todo-add-title, .todo-people-field, .todo-due-field, .todo-repeat-field { flex: 1 1 100%; }
-    .todo-due-field input, #todo-add-repeat { width: 100%; }
+    #todo-add-title, .todo-people-field, .todo-due-field, .todo-repeat-field, .todo-points-field { flex: 1 1 100%; }
+    .todo-due-field input, #todo-add-repeat, .todo-points-field input { width: 100%; }
+    /* On a phone the earnings chips get their own line rather than being
+       squeezed against the segmented control. */
+    #chore-earnings { margin-left: 0; flex: 1 1 100%; }
+    #todo-kind { flex: 0 0 auto; }
+    .kind-btn { padding: 5px 10px; }
 
     /* On a phone the row can't fit badges + a full name list + due + delete
        AND leave the title readable — with several assignees the title was
@@ -1750,6 +1767,11 @@
     <div id="todo-toolbar">
       <label for="todo-whose">Show</label>
       <select id="todo-whose"><option value="">Everyone</option></select>
+      <div id="todo-kind" role="group" aria-label="Filter by type">
+        <button type="button" class="kind-btn active" data-kind="all">All</button>
+        <button type="button" class="kind-btn" data-kind="chores">Chores</button>
+        <button type="button" class="kind-btn" data-kind="todos">To-dos</button>
+      </div>
       <div id="chore-earnings"></div>
     </div>
 
@@ -3053,6 +3075,7 @@ function showTab(name) {
   if (name === 'todos') {
     populateTodoPersonSelect();
     buildWhoseSelect();
+    syncKindButtons();
     // Earnings are refetched on every visit, not just the first: another device
     // may have completed chores or settled up since this tab was last opened.
     loadChoreEarnings().then(renderChoreEarnings);
@@ -3240,6 +3263,26 @@ function setWhoAmI(name) {
   try { name ? localStorage.setItem(ME_KEY, name) : localStorage.removeItem(ME_KEY); } catch (_) {}
 }
 
+// Chores and to-dos live in ONE list, split by a filter rather than by separate
+// tabs. The boundary between them is genuinely fuzzy ("clean your room this
+// Saturday" is either, depending on the family), and a tab would force everyone
+// to answer that question at the moment they add an item. A filter never asks.
+// Also per-device, so a kid's phone can sit on Chores while the kitchen tablet
+// shows everything.
+const KIND_KEY = 'kb_todo_kind';
+function todoKind() {
+  try { return localStorage.getItem(KIND_KEY) || 'all'; } catch (_) { return 'all'; }
+}
+function setTodoKind(kind) {
+  try { kind === 'all' ? localStorage.removeItem(KIND_KEY) : localStorage.setItem(KIND_KEY, kind); } catch (_) {}
+}
+
+// What makes something a chore: it repeats, or it's worth something. Both are
+// already recorded on the item, so nothing new has to be classified by hand.
+function isChore(t) {
+  return !!t.recurring || (t.points || 0) > 0;
+}
+
 let choreEarnings = null;
 
 async function loadTodos() {
@@ -3282,10 +3325,23 @@ function buildWhoseSelect() {
   if (sel.value !== me) setWhoAmI(sel.value);
 }
 
+// Reflect the saved segment on load, so a device that was left on "Chores"
+// comes back to it rather than silently resetting to All.
+function syncKindButtons() {
+  const kind = todoKind();
+  document.querySelectorAll('#todo-kind .kind-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.kind === kind);
+    b.setAttribute('aria-pressed', String(b.dataset.kind === kind));
+  });
+}
+
 function renderChoreEarnings() {
   const wrap = document.getElementById('chore-earnings');
   if (!wrap) return;
   wrap.innerHTML = '';
+  // Balances are meaningless next to a list that deliberately excludes every
+  // earning item, so the To-dos view drops them entirely.
+  if (todoKind() === 'todos') return;
   if (!choreEarnings || !choreEarnings.people || !choreEarnings.people.length) return;
 
   const me = whoAmI();
@@ -3334,19 +3390,25 @@ function renderTodos() {
   list.innerHTML = '';
 
   const me = whoAmI();
-  // Unassigned chores stay visible to everyone — "empty the dishwasher" with
+  const kind = todoKind();
+
+  // Unassigned items stay visible to everyone — "empty the dishwasher" with
   // nobody's name on it is still the household's job, and hiding it would let
   // shared work quietly disappear from every filtered view.
-  const visible = me
+  let visible = me
     ? todos.filter(t => !t.people || !t.people.length || t.people.includes(me))
     : todos;
+  if (kind === 'chores') visible = visible.filter(isChore);
+  else if (kind === 'todos') visible = visible.filter(t => !isChore(t));
 
   if (!visible.length) {
     const empty = document.createElement('div');
     empty.id = 'todos-empty';
-    empty.textContent = me
-      ? `Nothing for ${me} right now.`
-      : 'No to-dos yet — add one above.';
+    const who = me ? ` for ${me}` : '';
+    empty.textContent =
+      kind === 'chores' ? `No chores${who} right now.` :
+      kind === 'todos'  ? `No to-dos${who} right now.` :
+      me ? `Nothing for ${me} right now.` : 'No to-dos yet — add one above.';
     list.appendChild(empty);
     return;
   }
@@ -3866,6 +3928,15 @@ async function init() {
   // keeps its own answer without any server-side notion of "current user".
   document.getElementById('todo-whose').addEventListener('change', e => {
     setWhoAmI(e.target.value);
+    renderTodos();
+    renderChoreEarnings();
+  });
+
+  document.getElementById('todo-kind').addEventListener('click', e => {
+    const btn = e.target.closest('.kind-btn');
+    if (!btn) return;
+    setTodoKind(btn.dataset.kind);
+    syncKindButtons();
     renderTodos();
     renderChoreEarnings();
   });
