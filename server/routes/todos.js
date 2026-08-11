@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const db = require('../db');
 
 const RECUR_PATTERNS = new Set(['daily', 'weekly', 'monthly']);
@@ -15,6 +16,10 @@ function toRow(body) {
   if (body.dueDate !== undefined) row.due_date = body.dueDate || null;
   if (body.recurring !== undefined) row.recurring = RECUR_PATTERNS.has(body.recurring) ? body.recurring : null;
   if (body.notes !== undefined) row.notes = body.notes || null;
+  if (body.points !== undefined) {
+    const p = Math.trunc(Number(body.points));
+    row.points = Number.isFinite(p) ? Math.min(9999, Math.max(0, p)) : 0;
+  }
   if (body.done !== undefined) {
     row.done = !!body.done;
     row.completed_at = row.done ? new Date().toISOString() : null;
@@ -40,6 +45,25 @@ function nextDueDate(dateStr, pattern) {
     return fmtDate(next);
   }
   return dateStr;
+}
+
+// Append one ledger entry per assignee when a chore is checked off. Worth zero
+// points? Still recorded — "who did what, when" is useful on its own, and it
+// means turning points on later doesn't make earlier work look like it never
+// happened.
+//
+// Credited to every assignee rather than split between them: splitting a
+// 3-point chore between two kids invents fractions and arguments. An unassigned
+// chore credits nobody, so it simply isn't a paid chore.
+function recordCompletion(todo) {
+  const people = Array.isArray(todo.people) ? todo.people.filter(Boolean) : [];
+  if (!people.length) return;
+  const stmt = db.raw.prepare(
+    'INSERT INTO chore_completions (id, todo_id, title, person, points) VALUES (?, ?, ?, ?, ?)'
+  );
+  for (const person of people) {
+    stmt.run(crypto.randomUUID(), todo.id, todo.title, person, todo.points || 0);
+  }
 }
 
 // List todos. Open items first (oldest first), then completed items
@@ -82,8 +106,14 @@ async function update(req, res) {
   // of marking it permanently done — chores repeat, they don't finish.
   if (row.done === true) {
     const { data: existing } = await db
-      .from('todos').select('due_date, recurring')
+      .from('todos').select('id, title, due_date, recurring, points, people')
       .eq('id', req.params.id).maybeSingle();
+
+    // Record the completion BEFORE the row mutates. For a repeating chore the
+    // row is about to forget this ever happened (done flips back to false), so
+    // the ledger is the only place the earning survives.
+    if (existing) recordCompletion(existing);
+
     if (existing && existing.recurring && existing.due_date) {
       row.due_date = nextDueDate(existing.due_date, existing.recurring);
       row.done = false;
@@ -115,4 +145,65 @@ async function remove(req, res) {
   res.json({ ok: true });
 }
 
-module.exports = { list, create, update, remove };
+// ── Earnings ────────────────────────────────────────────────────────────────
+
+function settingsRow() {
+  return db.raw.prepare('SELECT point_value_cents, currency_symbol FROM settings WHERE id = 1').get()
+    || { point_value_cents: 0, currency_symbol: '$' };
+}
+
+// Per-person totals, plus the unsettled balance a parent actually owes.
+// `outstanding` deliberately counts only completions that haven't been paid
+// out, so settling up doesn't erase the history of what was earned.
+async function earnings(req, res) {
+  const s = settingsRow();
+  const rows = db.raw.prepare(`
+    SELECT person,
+           SUM(points)                                        AS points_total,
+           SUM(CASE WHEN paid_out_at IS NULL THEN points ELSE 0 END) AS points_outstanding,
+           COUNT(*)                                           AS completions,
+           MAX(completed_at)                                  AS last_completed
+    FROM chore_completions
+    GROUP BY person
+    ORDER BY points_outstanding DESC, person ASC
+  `).all();
+
+  const cents = (p) => p * (s.point_value_cents || 0);
+  res.json({
+    pointValueCents: s.point_value_cents || 0,
+    currencySymbol: s.currency_symbol || '$',
+    people: rows.map((r) => ({
+      person: r.person,
+      points: r.points_total || 0,
+      pointsOutstanding: r.points_outstanding || 0,
+      completions: r.completions || 0,
+      lastCompleted: r.last_completed || null,
+      earnedCents: cents(r.points_total || 0),
+      owedCents: cents(r.points_outstanding || 0),
+    })),
+  });
+}
+
+// Recent completion history, optionally for one person.
+async function completions(req, res) {
+  const person = (req.query.person || '').trim();
+  const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+  const rows = person
+    ? db.raw.prepare('SELECT * FROM chore_completions WHERE person = ? ORDER BY completed_at DESC LIMIT ?').all(person, limit)
+    : db.raw.prepare('SELECT * FROM chore_completions ORDER BY completed_at DESC LIMIT ?').all(limit);
+  res.json({ completions: rows });
+}
+
+// Settle up: stamp everything currently owed to someone as paid. Keeps the rows
+// (so history survives) rather than deleting them — "I already paid you for
+// that" is exactly the argument this table exists to end.
+async function payout(req, res) {
+  const person = (req.body && String(req.body.person || '').trim()) || '';
+  if (!person) return res.status(400).json({ error: 'person is required' });
+  const info = db.raw
+    .prepare("UPDATE chore_completions SET paid_out_at = datetime('now') WHERE person = ? AND paid_out_at IS NULL")
+    .run(person);
+  res.json({ ok: true, settled: info.changes });
+}
+
+module.exports = { list, create, update, remove, earnings, completions, payout };

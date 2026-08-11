@@ -36,6 +36,8 @@ create table if not exists settings (
   is_public          integer not null default 0,          -- read-only public calendar?
   share_token        text,                                 -- secret for read-only share page + .ics feed
   share_keywords     text not null default '[]',          -- JSON array of title keywords that auto-share
+  point_value_cents  integer not null default 0,          -- what one chore point is worth; 0 = points only, no money
+  currency_symbol    text not null default '$',
   created_at         text not null default (datetime('now'))
 );
 
@@ -100,10 +102,31 @@ create table if not exists todos (
   due_date     text,
   recurring    text,                                 -- 'daily' | 'weekly' | 'monthly' | null (chores)
   notes        text,
+  points       integer not null default 0,          -- reward for completing; 0 = not a paid chore
   created_at   text not null default (datetime('now')),
   updated_at   text not null default (datetime('now')),
   completed_at text
 );
+
+-- Every completion of a chore, as an append-only ledger.
+--
+-- This can't be derived from `todos`: a REPEATING chore never stays done — it
+-- advances to its next due date — so the row itself remembers nothing about the
+-- times it was completed. Without a ledger, the exact chores you most want to
+-- pay out on would be worth nothing. Points are copied in at completion time so
+-- editing a chore's value later can't silently rewrite what someone already
+-- earned.
+create table if not exists chore_completions (
+  id           text primary key,
+  todo_id      text,                                 -- nullable: history outlives a deleted chore
+  title        text not null,                        -- snapshot, so deleting the chore keeps the record readable
+  person       text not null,                        -- member display_name credited
+  points       integer not null default 0,           -- snapshot of the value at completion time
+  completed_at text not null default (datetime('now')),
+  paid_out_at  text                                  -- set when a parent settles up; null = still owed
+);
+
+create index if not exists chore_completions_person_idx on chore_completions (person, completed_at);
 
 -- Web Push. A subscription is a DEVICE, not a person — Kinboard has one shared
 -- household password and no individual logins, so each device declares who it

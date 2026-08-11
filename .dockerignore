@@ -1,0 +1,18 @@
+# Keep the build context small and make it impossible to bake local state into
+# an image. `data/` in particular holds a real household's calendar — it must
+# never reach a published image.
+data/
+node_modules/
+.env
+*.log
+
+.git/
+.github/
+.gitignore
+.dockerignore
+
+README.md
+LICENSE
+SECURITY.md
+CHANGELOG.md
+docker-compose.yml

@@ -1,0 +1,28 @@
+version: 2
+updates:
+  # App dependencies. Grouped so a quiet week produces one PR instead of six —
+  # the main reason solo maintainers end up ignoring Dependabot entirely.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      production:
+        dependency-type: production
+        update-types: [minor, patch]
+      development:
+        dependency-type: development
+
+  # Workflow actions — these run with repo credentials, so stale ones matter.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+
+  # The node:22-alpine base image, which is where most CVEs in the published
+  # image actually come from.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly

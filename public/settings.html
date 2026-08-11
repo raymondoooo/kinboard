@@ -439,6 +439,21 @@
         </div>
       </div>
 
+      <!-- Chores & points -->
+      <div class="card">
+        <h2>Chores &amp; points</h2>
+        <p class="section-sub">You give each chore a point value on the To-Do tab — points are just how you set what a chore is worth relative to the others. The family never sees them: everyone sees what they've earned in money.</p>
+
+        <div class="field">
+          <label for="set-point-value">What one point is worth</label>
+          <div class="row-2">
+            <input type="text" id="set-currency" maxlength="4" placeholder="$" style="max-width:5rem;" />
+            <input type="number" id="set-point-value" min="0" max="1000" step="0.01" placeholder="0.00" />
+          </div>
+          <div class="hint">Kinboard tracks earnings every time a chore is completed — including repeating ones, every time round. <strong>Until you set a value above, nothing is shown to the family.</strong></div>
+        </div>
+      </div>
+
       <!-- Notifications -->
       <div class="card">
         <h2>Notifications</h2>
@@ -841,6 +856,9 @@
           is_public: document.getElementById('set-public').checked,
           holidays,
           share_keywords: shareKeywords,
+          // Stored as integer cents so a point is never worth 0.30000000000000004.
+          point_value_cents: Math.round((parseFloat(document.getElementById('set-point-value').value) || 0) * 100),
+          currency_symbol: document.getElementById('set-currency').value.trim() || '$',
         };
         const res = await api('PATCH', '/api/settings', body);
         localStorage.setItem('theme', body.theme);
@@ -1441,6 +1459,9 @@
       document.getElementById('set-firstday').value = String(config.firstDayOfWeek ?? 0);
       document.getElementById('set-weeks').value = String(config.weeksToShow ?? 4);
       document.getElementById('set-public').checked = !!config.isPublic;
+      document.getElementById('set-point-value').value =
+        config.pointValueCents ? (config.pointValueCents / 100).toFixed(2) : '';
+      document.getElementById('set-currency').value = config.currencySymbol || '$';
       // Reflect the theme actually in effect (the 🎨 button on the calendar sets
       // localStorage only) so saving a settings change doesn't clobber a
       // locally-chosen theme back to the account default.

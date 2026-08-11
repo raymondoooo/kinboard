@@ -1,15 +1,32 @@
-FROM node:22-alpine
+# ── Build stage ─────────────────────────────────────────────────────────────
+# better-sqlite3 has a native binding that must be compiled when no prebuilt
+# binary matches the platform (notably on arm64). The toolchain that does that
+# is ~160MB of gcc and python3 — it belongs here and nowhere near the image
+# users actually run.
+FROM node:22-alpine AS build
 
-# python3/make/g++ are needed to build better-sqlite3's native binding when no
-# prebuilt binary matches this platform. su-exec lets the entrypoint drop from
-# root to the unprivileged `node` user after fixing up volume ownership.
-RUN apk add --no-cache python3 make g++ su-exec
+RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 
-COPY package.json ./
-RUN npm install --omit=dev
+# Lockfile-driven install: `npm ci` installs exactly what package-lock.json
+# pins, so an image built today matches one built next year.
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
+# ── Runtime stage ───────────────────────────────────────────────────────────
+FROM node:22-alpine
+
+# su-exec only — it lets the entrypoint fix volume ownership as root and then
+# drop to an unprivileged user. The compiler stays behind in the build stage.
+RUN apk add --no-cache su-exec
+
+WORKDIR /app
+
+# The compiled native binding lives inside node_modules, so copying the tree
+# across is all that's needed — no rebuild, no toolchain.
+COPY --from=build /app/node_modules ./node_modules
+COPY package.json ./
 COPY server ./server
 COPY public ./public
 COPY schema.sql ./schema.sql
@@ -17,13 +34,24 @@ COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
 # The SQLite file, its WAL sidecars, and nightly backups all live here — the
-# only path that needs a volume. Ownership is fixed up at container start
-# (see docker-entrypoint.sh), not here at build time: a host bind mount that
-# doesn't exist yet gets created root-owned by Docker itself, which would
-# otherwise shadow whatever this image's own copy of the directory was
-# chown'd to.
+# only path that needs a volume. Ownership is fixed at container start (see
+# docker-entrypoint.sh), not at build time: a host bind mount that doesn't
+# exist yet is created root-owned by Docker itself, which would otherwise
+# shadow whatever this image's own copy of the directory was chown'd to.
 VOLUME /app/data
 
 EXPOSE 3000
+
+# Reports unhealthy if the process is up but can't answer — e.g. the database
+# file became unreadable. Uses Node's built-in fetch so the image needs no curl.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+# Static fallbacks; CI overrides these with richer values from
+# docker/metadata-action (revision, created, version).
+LABEL org.opencontainers.image.title="Kinboard" \
+      org.opencontainers.image.description="Self-hosted family calendar — events, meals, chores, iCal feeds, push notifications" \
+      org.opencontainers.image.source="https://github.com/raymondoooo/kinboard" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
