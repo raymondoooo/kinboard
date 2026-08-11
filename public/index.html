@@ -3345,7 +3345,10 @@ function renderChoreEarnings() {
   if (!choreEarnings || !choreEarnings.people || !choreEarnings.people.length) return;
 
   const me = whoAmI();
-  const showsMoney = (choreEarnings.pointValueCents || 0) > 0;
+  // No rate set means nothing has a cash value yet, so there is no balance worth
+  // showing a kid. The parent sets a value in Settings to switch this on.
+  if ((choreEarnings.pointValueCents || 0) <= 0) return;
+
   // When a device has picked a person, show only their chip — a kid checking
   // their own balance doesn't need a leaderboard of their siblings.
   const people = me ? choreEarnings.people.filter(p => p.person === me) : choreEarnings.people;
@@ -3356,15 +3359,14 @@ function renderChoreEarnings() {
     chip.className = 'earn-chip';
     chip.innerHTML =
       `<span class="earn-name">${escapeHtml(withEmoji(p.person))}</span>` +
-      `<span class="earn-val">${p.pointsOutstanding} pt${p.pointsOutstanding === 1 ? '' : 's'}` +
-      (showsMoney ? ` · ${money(p.owedCents)}` : '') + `</span>`;
+      `<span class="earn-val">${money(p.owedCents)}</span>`;
     if (p.pointsOutstanding > 0) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = 'paid';
-      btn.title = `Mark ${p.person}'s ${p.pointsOutstanding} points as settled`;
+      btn.title = `Settle up with ${p.person} (${p.pointsOutstanding} points)`;
       btn.addEventListener('click', async () => {
-        const label = showsMoney ? money(p.owedCents) : `${p.pointsOutstanding} points`;
+        const label = money(p.owedCents);
         if (!confirm(`Mark ${label} as paid to ${p.person}?\n\nTheir history is kept — this only clears what's owed.`)) return;
         await apiFetch('/api/chores/payout', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -3446,16 +3448,19 @@ function renderTodos() {
       row.appendChild(name);
     }
 
-    if (t.points > 0) {
-      const pts = document.createElement('div');
-      pts.className = 'todo-points';
-      pts.textContent = `${t.points} pt${t.points === 1 ? '' : 's'}`;
-      const cents = (appConfig && appConfig.pointValueCents) || 0;
-      if (cents > 0) {
-        const sym = (appConfig && appConfig.currencySymbol) || '$';
-        pts.title = `Worth ${sym}${((t.points * cents) / 100).toFixed(2)}`;
-      }
-      row.appendChild(pts);
+    // Kids see money, never points. Points are the parent's dial for setting
+    // relative worth; "$0.75" is the thing that actually motivates a nine year
+    // old. With no rate set there is no money yet, so the badge stays off
+    // entirely rather than showing a meaningless $0.00.
+    const rateCents = (appConfig && appConfig.pointValueCents) || 0;
+    if (t.points > 0 && rateCents > 0) {
+      const val = document.createElement('div');
+      val.className = 'todo-points';
+      const sym = (appConfig && appConfig.currencySymbol) || '$';
+      val.textContent = `${sym}${((t.points * rateCents) / 100).toFixed(2)}`;
+      // The underlying points stay discoverable to a parent on hover.
+      val.title = `${t.points} point${t.points === 1 ? '' : 's'}`;
+      row.appendChild(val);
     }
 
     if (t.due_date) {
@@ -3499,12 +3504,24 @@ function openTodoEditForm(todo) {
   document.getElementById('td-title').value = todo.title || '';
   document.getElementById('td-due').value = todo.due_date || '';
   document.getElementById('td-repeat').value = todo.recurring || '';
-  document.getElementById('td-points').value = todo.points ? String(todo.points) : '';
+  const ptsEl = document.getElementById('td-points');
+  ptsEl.value = todo.points ? String(todo.points) : '';
+  // Points are the parent's dial; the family only ever sees the money. Show the
+  // live conversion right here so setting a value doesn't require mental
+  // arithmetic against a rate buried in Settings.
   const cents = (appConfig && appConfig.pointValueCents) || 0;
   const sym = (appConfig && appConfig.currencySymbol) || '$';
-  document.getElementById('td-points-hint').textContent = cents > 0
-    ? `(${sym}${(cents / 100).toFixed(2)} each)`
-    : '(optional)';
+  const hint = document.getElementById('td-points-hint');
+  const updateHint = () => {
+    const n = Math.max(0, parseInt(ptsEl.value, 10) || 0);
+    hint.textContent = cents <= 0
+      ? '(set a point value in Settings to pay for chores)'
+      : n > 0
+        ? `= ${sym}${((n * cents) / 100).toFixed(2)}`
+        : `(${sym}${(cents / 100).toFixed(2)} per point)`;
+  };
+  ptsEl.oninput = updateHint;
+  updateHint();
   tdPeople = Array.isArray(todo.people) ? [...todo.people] : [];
   renderPersonChips('td-person-chips', tdPeople, NON_PERSON_NAMES);
   document.getElementById('todo-overlay').classList.add('open');
