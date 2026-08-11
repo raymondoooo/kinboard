@@ -41,11 +41,70 @@ function ensureColumn(table, column, definition) {
   return true;
 }
 
-// Upgrades for databases created before a given feature existed. Keep these
-// forever — a user can jump from any old version straight to the newest image.
-ensureColumn('todos', 'points', 'integer not null default 0');
-ensureColumn('settings', 'point_value_cents', 'integer not null default 0');
-ensureColumn('settings', 'currency_symbol', "text not null default '$'");
+// ── Schema versioning + downgrade protection ────────────────────────────────
+// The version lives in SQLite's own `PRAGMA user_version` (an integer in the
+// file header), so it needs no table and travels with the database file.
+//
+// The failure this exists to prevent: a user pulls a newer image, hits a bug,
+// and rolls back to the previous tag. Their database has already been upgraded,
+// and the older binary knows nothing about the new shape — so it writes happily
+// into a schema it doesn't understand and quietly corrupts their data. Refusing
+// to start is dramatically better than that, and it's what mature self-hosted
+// projects do.
+//
+// Migrations are forward-only and ordered. Each `up()` must be safe to re-run:
+// databases predating this versioning scheme report version 0 and may already
+// have some of these columns from a pre-release build, so every step goes
+// through ensureColumn rather than a bare ALTER.
+const SCHEMA_VERSION = 2;
+
+const MIGRATIONS = [
+  {
+    version: 1,
+    describe: 'baseline (tables are created by schema.sql)',
+    up() { /* schema.sql already ran above; nothing extra for the original shape */ },
+  },
+  {
+    version: 2,
+    describe: 'chore points, point value, and the earnings ledger',
+    up() {
+      ensureColumn('todos', 'points', 'integer not null default 0');
+      ensureColumn('settings', 'point_value_cents', 'integer not null default 0');
+      ensureColumn('settings', 'currency_symbol', "text not null default '$'");
+      // chore_completions itself is created by schema.sql (create table if not exists).
+    },
+  },
+];
+
+function migrate() {
+  const current = raw.pragma('user_version', { simple: true }) || 0;
+
+  if (current > SCHEMA_VERSION) {
+    console.error(
+      `\n[db] REFUSING TO START — this database was created by a NEWER version of Kinboard.\n` +
+      `     database schema version: ${current}\n` +
+      `     this image understands:  ${SCHEMA_VERSION}\n\n` +
+      `     You have most likely rolled back to an older image. Running this version\n` +
+      `     would write into a schema it does not understand and could corrupt your\n` +
+      `     data, so it is stopping instead.\n\n` +
+      `     Fix: go back to the newer image tag. If you genuinely need to downgrade,\n` +
+      `     restore a backup from /app/data/backups taken before the upgrade.\n`
+    );
+    process.exit(1);
+  }
+
+  if (current === SCHEMA_VERSION) return;
+
+  for (const m of MIGRATIONS) {
+    if (m.version <= current) continue;
+    console.log(`[db] migrating to schema v${m.version} — ${m.describe}`);
+    raw.transaction(() => m.up())();
+  }
+  raw.pragma(`user_version = ${SCHEMA_VERSION}`);
+  console.log(`[db] schema is now v${SCHEMA_VERSION}`);
+}
+
+migrate();
 
 // ── Column type maps ────────────────────────────────────────────────────────
 // SQLite has no array/JSON or boolean types. JSON columns round-trip through

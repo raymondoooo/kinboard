@@ -85,6 +85,21 @@ function rateLimit({ max = 60, windowMs = 60_000 } = {}) {
   };
 }
 
+// Liveness/readiness for Docker's HEALTHCHECK and any external monitor.
+// Deliberately unauthenticated (a health probe has no session) and deliberately
+// touches the database — a process that's up but can't read its own storage is
+// not healthy, and that's exactly the failure a port check would miss. Leaks
+// nothing beyond "I am working".
+app.get('/api/health', (req, res) => {
+  try {
+    db.raw.prepare('SELECT 1').get();
+    res.json({ status: 'ok', setup: !!req.setupDone });
+  } catch (err) {
+    console.error('[health] database unreadable:', err.message);
+    res.status(503).json({ status: 'error' });
+  }
+});
+
 // ── Setup / login / logout ──
 app.post('/api/setup', auth.setupHandler);
 app.post('/api/login', rateLimit({ max: 10, windowMs: 5 * 60 * 1000 }), auth.loginHandler);
