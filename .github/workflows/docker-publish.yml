@@ -192,7 +192,7 @@ jobs:
       # version) that link the image back to this repo.
       - name: Derive tags and labels
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: |
             ${{ secrets.DOCKERHUB_USERNAME }}/kinboard
