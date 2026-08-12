@@ -4,246 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Calendar settings — Kinboard</title>
-      <!-- Calendar settings -->
-      <details class="card" data-sec="setup">
-        <summary class="card-head"><h2>Setup</h2></summary>
-        <div class="card-body">
-        <p class="section-sub">Name, weather, layout, theme, and visibility.</p>
-
-        <div class="field">
-          <label>Calendar name</label>
-          <input type="text" id="set-name" maxlength="60" />
-        </div>
-
-        <div class="field">
-          <label>ZIP code <span class="opt-note">· for weather</span></label>
-          <div class="row-2">
-            <input type="text" id="set-zip" placeholder="90210" maxlength="5" inputmode="numeric" />
-            <select id="set-units">
-              <option value="fahrenheit">°F</option>
-              <option value="celsius">°C</option>
-            </select>
-          </div>
-          <div class="hint">Leave blank to hide weather. Looked up via the free, keyless Zippopotam.us + Open-Meteo APIs.</div>
-        </div>
-
-        <div class="field row-2">
-          <div>
-            <label>Time zone</label>
-            <select id="set-tz"></select>
-          </div>
-          <div>
-            <label>Week starts on</label>
-            <select id="set-firstday">
-              <option value="0">Sunday</option>
-              <option value="1">Monday</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="field">
-          <label>Weeks to show</label>
-          <select id="set-weeks">
-            <option value="2">2 weeks</option>
-            <option value="3">3 weeks</option>
-            <option value="4">4 weeks</option>
-            <option value="5">5 weeks</option>
-            <option value="6">6 weeks</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label>Theme</label>
-          <div class="theme-grid" id="theme-grid"></div>
-        </div>
-
-        <!-- Wording matters here. "Anyone with the link" (the old label) reads
-             like the Share link below it — an unguessable URL showing only the
-             events you tagged. This toggle is not that: it removes the password
-             from the calendar itself, so every event, time and location is
-             readable by anyone who reaches this address. -->
-        <div class="field">
-          <div class="toggle-field">
-            <div>
-              <div class="toggle-label">Turn off the password (public calendar)</div>
-              <div class="toggle-desc">
-                Lets <strong>anyone who can reach this address</strong> read the whole
-                calendar — every event, time, person and location — with no password.
-                This is not the Share link: it has no secret URL and no keyword filter.
-                Off = the household password is required to view.
-              </div>
-              <div class="toggle-warn" id="public-warn">
-                This calendar is readable by anyone who can reach it. If it is exposed to
-                the internet, that means anyone at all. To share only some events instead,
-                turn this off and use the <strong>Share link</strong> section below.
-              </div>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="set-public" />
-              <span class="track"></span>
-            </label>
-          </div>
-        </div>
-        </div>
-      </details>
-
-      <!-- Account -->
-      <details class="card" data-sec="household-password">
-        <summary class="card-head"><h2>Household password</h2></summary>
-        <div class="card-body">
-        <p class="section-sub">Everyone who knows this password can view and edit the calendar. Changing it signs out every other device.</p>
-        <div class="field">
-          <label>Current password</label>
-          <input type="password" id="pw-current" autocomplete="current-password" />
-        </div>
-        <div class="field">
-          <label>New password</label>
-          <input type="password" id="pw-new" autocomplete="new-password" minlength="6" />
-        </div>
-        <button class="btn" id="pw-save" type="button">Change password</button>
-        </div>
-      </details>
-
-      <!-- Family -->
-      <details class="card" data-sec="family">
-        <summary class="card-head"><h2>Family</h2></summary>
-        <div class="card-body">
-        <p class="section-sub">The people on this calendar. Each has a color and an optional emoji. (Everyone shares the one household password — this is just how they're labeled on events.)</p>
-        <div id="members-list"></div>
-        <div class="section-actions">
-          <button class="add-btn" id="add-member">+ Add a person</button>
-        </div>
-        </div>
-      </details>
-
-      <!-- Categories -->
-      <details class="card" data-sec="categories">
-        <summary class="card-head"><h2>Categories</h2></summary>
-        <div class="card-body">
-        <p class="section-sub">Shared event types — assign calendars or events to these to color them as a group.</p>
-        <div id="categories-list"></div>
-        </div>
-      </details>
-
-      <!-- Chores & points -->
-      <details class="card" data-sec="chores-and-points">
-        <summary class="card-head"><h2>Chores &amp; points</h2></summary>
-        <div class="card-body">
-        <p class="section-sub">You give each chore a point value on the To-Do tab — points are just how you set what a chore is worth relative to the others. The family never sees them: everyone sees what they've earned in money.</p>
-
-        <div class="field">
-          <label for="set-point-value">What one point is worth</label>
-          <div class="row-2">
-            <input type="text" id="set-currency" maxlength="4" placeholder="$" style="max-width:5rem;" />
-            <input type="number" id="set-point-value" min="0" max="1000" step="0.01" placeholder="0.00" />
-          </div>
-          <div class="hint">Kinboard tracks earnings every time a chore is completed — including repeating ones, every time round. <strong>Until you set a value above, nothing is shown to the family.</strong></div>
-        </div>
-        </div>
-      </details>
-
-      <!-- Holidays -->
-      <details class="card" data-sec="holidays">
-        <summary class="card-head"><h2>Holidays</h2></summary>
-        <div class="card-body">
-        <p class="section-sub">These appear automatically on your calendar on the right dates each year.</p>
-        <div class="holiday-grid" id="holiday-grid"></div>
-        </div>
-      </details>
-
-      <!-- Notifications -->
-      <details class="card" data-sec="notifications">
-        <summary class="card-head"><h2>Notifications</h2></summary>
-        <div class="card-body">
-        <p class="section-sub">Get a push notification on this device for today's schedule, upcoming events, and anything newly added for the people you care about.</p>
-
-        <!-- Shown when the browser can't do Web Push (plain HTTP, or unsupported). -->
-        <div id="push-unsupported" class="hidden">
-          <p class="hint" id="push-unsupported-msg" style="margin-top:0;"></p>
-        </div>
-
-        <div id="push-supported" class="hidden">
-          <div id="push-off">
-            <button class="add-btn" id="push-enable-btn" type="button">Turn on notifications for this device</button>
-            <p class="hint" id="push-denied-msg" class="hidden" style="display:none;"></p>
-          </div>
-
-          <div id="push-on" style="display:none;">
-            <div class="field">
-              <label for="push-label">This device's name</label>
-              <input type="text" id="push-label" maxlength="60" placeholder="Dad's phone" />
-            </div>
-
-            <div class="field">
-              <label>Notify me about</label>
-              <p class="section-sub" style="margin-bottom:0.6rem;">Pick whose events this device should be notified about. Choose nobody to get everything.</p>
-              <div id="push-people" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-            </div>
-
-            <div class="field">
-              <label for="push-lead">Remind me before an event</label>
-              <select id="push-lead">
-                <option value="0">At start time</option>
-                <option value="15">15 minutes before</option>
-                <option value="30">30 minutes before</option>
-                <option value="60" selected>1 hour before</option>
-                <option value="120">2 hours before</option>
-                <option value="1440">1 day before</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <div class="toggle-field">
-                <div>
-                  <div class="toggle-label">Daily digest</div>
-                  <div class="toggle-desc">A morning summary of the day's schedule.</div>
-                </div>
-                <label class="switch">
-                  <input type="checkbox" id="push-digest" checked />
-                  <span class="track"></span>
-                </label>
-              </div>
-            </div>
-
-            <div class="field">
-              <div class="toggle-field">
-                <div>
-                  <div class="toggle-label">Event reminders</div>
-                  <div class="toggle-desc">A heads-up before each event starts.</div>
-                </div>
-                <label class="switch">
-                  <input type="checkbox" id="push-reminders" checked />
-                  <span class="track"></span>
-                </label>
-              </div>
-            </div>
-
-            <div class="field">
-              <div class="toggle-field">
-                <div>
-                  <div class="toggle-label">New events</div>
-                  <div class="toggle-desc">Tells you right away when someone adds an event for you.</div>
-                </div>
-                <label class="switch">
-                  <input type="checkbox" id="push-onadd" checked />
-                  <span class="track"></span>
-                </label>
-              </div>
-            </div>
-
-            <div class="section-actions">
-              <button class="btn btn-sm btn-ghost" id="push-test-btn" type="button" style="flex:0 0 auto;width:auto;">Send test notification</button>
-              <button class="btn btn-sm btn-danger" id="push-disable-btn" type="button" style="flex:0 0 auto;width:auto;">Turn off on this device</button>
-            </div>
-          </div>
-
-          <hr style="border:none;border-top:1px solid var(--border);margin:1.25rem 0;" />
-          <label style="display:block;font-size:0.85rem;color:var(--muted);margin-bottom:0.5rem;">Devices receiving notifications</label>
-          <div id="push-devices"></div>
-        </div>
-        </div>
-      </details>
-
   <!-- iOS uses the icon declared by THE PAGE YOU ADD to the Home Screen, not
        the one on your start page. These links lived only on index.html, so
        installing from Settings — which is exactly where the "add to Home Screen
@@ -558,6 +318,246 @@
       <h1 id="page-title">Calendar settings</h1>
 
       <!-- Share & subscribe -->
+      <!-- Calendar settings -->
+      <details class="card" data-sec="setup">
+        <summary class="card-head"><h2>Setup</h2></summary>
+        <div class="card-body">
+        <p class="section-sub">Name, weather, layout, theme, and visibility.</p>
+
+        <div class="field">
+          <label>Calendar name</label>
+          <input type="text" id="set-name" maxlength="60" />
+        </div>
+
+        <div class="field">
+          <label>ZIP code <span class="opt-note">· for weather</span></label>
+          <div class="row-2">
+            <input type="text" id="set-zip" placeholder="90210" maxlength="5" inputmode="numeric" />
+            <select id="set-units">
+              <option value="fahrenheit">°F</option>
+              <option value="celsius">°C</option>
+            </select>
+          </div>
+          <div class="hint">Leave blank to hide weather. Looked up via the free, keyless Zippopotam.us + Open-Meteo APIs.</div>
+        </div>
+
+        <div class="field row-2">
+          <div>
+            <label>Time zone</label>
+            <select id="set-tz"></select>
+          </div>
+          <div>
+            <label>Week starts on</label>
+            <select id="set-firstday">
+              <option value="0">Sunday</option>
+              <option value="1">Monday</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Weeks to show</label>
+          <select id="set-weeks">
+            <option value="2">2 weeks</option>
+            <option value="3">3 weeks</option>
+            <option value="4">4 weeks</option>
+            <option value="5">5 weeks</option>
+            <option value="6">6 weeks</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Theme</label>
+          <div class="theme-grid" id="theme-grid"></div>
+        </div>
+
+        <!-- Wording matters here. "Anyone with the link" (the old label) reads
+             like the Share link below it — an unguessable URL showing only the
+             events you tagged. This toggle is not that: it removes the password
+             from the calendar itself, so every event, time and location is
+             readable by anyone who reaches this address. -->
+        <div class="field">
+          <div class="toggle-field">
+            <div>
+              <div class="toggle-label">Turn off the password (public calendar)</div>
+              <div class="toggle-desc">
+                Lets <strong>anyone who can reach this address</strong> read the whole
+                calendar — every event, time, person and location — with no password.
+                This is not the Share link: it has no secret URL and no keyword filter.
+                Off = the household password is required to view.
+              </div>
+              <div class="toggle-warn" id="public-warn">
+                This calendar is readable by anyone who can reach it. If it is exposed to
+                the internet, that means anyone at all. To share only some events instead,
+                turn this off and use the <strong>Share link</strong> section below.
+              </div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="set-public" />
+              <span class="track"></span>
+            </label>
+          </div>
+        </div>
+        </div>
+      </details>
+
+      <!-- Account -->
+      <details class="card" data-sec="household-password">
+        <summary class="card-head"><h2>Household password</h2></summary>
+        <div class="card-body">
+        <p class="section-sub">Everyone who knows this password can view and edit the calendar. Changing it signs out every other device.</p>
+        <div class="field">
+          <label>Current password</label>
+          <input type="password" id="pw-current" autocomplete="current-password" />
+        </div>
+        <div class="field">
+          <label>New password</label>
+          <input type="password" id="pw-new" autocomplete="new-password" minlength="6" />
+        </div>
+        <button class="btn" id="pw-save" type="button">Change password</button>
+        </div>
+      </details>
+
+      <!-- Family -->
+      <details class="card" data-sec="family">
+        <summary class="card-head"><h2>Family</h2></summary>
+        <div class="card-body">
+        <p class="section-sub">The people on this calendar. Each has a color and an optional emoji. (Everyone shares the one household password — this is just how they're labeled on events.)</p>
+        <div id="members-list"></div>
+        <div class="section-actions">
+          <button class="add-btn" id="add-member">+ Add a person</button>
+        </div>
+        </div>
+      </details>
+
+      <!-- Categories -->
+      <details class="card" data-sec="categories">
+        <summary class="card-head"><h2>Categories</h2></summary>
+        <div class="card-body">
+        <p class="section-sub">Shared event types — assign calendars or events to these to color them as a group.</p>
+        <div id="categories-list"></div>
+        </div>
+      </details>
+
+      <!-- Chores & points -->
+      <details class="card" data-sec="chores-and-points">
+        <summary class="card-head"><h2>Chores &amp; points</h2></summary>
+        <div class="card-body">
+        <p class="section-sub">You give each chore a point value on the To-Do tab — points are just how you set what a chore is worth relative to the others. The family never sees them: everyone sees what they've earned in money.</p>
+
+        <div class="field">
+          <label for="set-point-value">What one point is worth</label>
+          <div class="row-2">
+            <input type="text" id="set-currency" maxlength="4" placeholder="$" style="max-width:5rem;" />
+            <input type="number" id="set-point-value" min="0" max="1000" step="0.01" placeholder="0.00" />
+          </div>
+          <div class="hint">Kinboard tracks earnings every time a chore is completed — including repeating ones, every time round. <strong>Until you set a value above, nothing is shown to the family.</strong></div>
+        </div>
+        </div>
+      </details>
+
+      <!-- Holidays -->
+      <details class="card" data-sec="holidays">
+        <summary class="card-head"><h2>Holidays</h2></summary>
+        <div class="card-body">
+        <p class="section-sub">These appear automatically on your calendar on the right dates each year.</p>
+        <div class="holiday-grid" id="holiday-grid"></div>
+        </div>
+      </details>
+
+      <!-- Notifications -->
+      <details class="card" data-sec="notifications">
+        <summary class="card-head"><h2>Notifications</h2></summary>
+        <div class="card-body">
+        <p class="section-sub">Get a push notification on this device for today's schedule, upcoming events, and anything newly added for the people you care about.</p>
+
+        <!-- Shown when the browser can't do Web Push (plain HTTP, or unsupported). -->
+        <div id="push-unsupported" class="hidden">
+          <p class="hint" id="push-unsupported-msg" style="margin-top:0;"></p>
+        </div>
+
+        <div id="push-supported" class="hidden">
+          <div id="push-off">
+            <button class="add-btn" id="push-enable-btn" type="button">Turn on notifications for this device</button>
+            <p class="hint" id="push-denied-msg" class="hidden" style="display:none;"></p>
+          </div>
+
+          <div id="push-on" style="display:none;">
+            <div class="field">
+              <label for="push-label">This device's name</label>
+              <input type="text" id="push-label" maxlength="60" placeholder="Dad's phone" />
+            </div>
+
+            <div class="field">
+              <label>Notify me about</label>
+              <p class="section-sub" style="margin-bottom:0.6rem;">Pick whose events this device should be notified about. Choose nobody to get everything.</p>
+              <div id="push-people" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+            </div>
+
+            <div class="field">
+              <label for="push-lead">Remind me before an event</label>
+              <select id="push-lead">
+                <option value="0">At start time</option>
+                <option value="15">15 minutes before</option>
+                <option value="30">30 minutes before</option>
+                <option value="60" selected>1 hour before</option>
+                <option value="120">2 hours before</option>
+                <option value="1440">1 day before</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <div class="toggle-field">
+                <div>
+                  <div class="toggle-label">Daily digest</div>
+                  <div class="toggle-desc">A morning summary of the day's schedule.</div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="push-digest" checked />
+                  <span class="track"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="field">
+              <div class="toggle-field">
+                <div>
+                  <div class="toggle-label">Event reminders</div>
+                  <div class="toggle-desc">A heads-up before each event starts.</div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="push-reminders" checked />
+                  <span class="track"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="field">
+              <div class="toggle-field">
+                <div>
+                  <div class="toggle-label">New events</div>
+                  <div class="toggle-desc">Tells you right away when someone adds an event for you.</div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="push-onadd" checked />
+                  <span class="track"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="section-actions">
+              <button class="btn btn-sm btn-ghost" id="push-test-btn" type="button" style="flex:0 0 auto;width:auto;">Send test notification</button>
+              <button class="btn btn-sm btn-danger" id="push-disable-btn" type="button" style="flex:0 0 auto;width:auto;">Turn off on this device</button>
+            </div>
+          </div>
+
+          <hr style="border:none;border-top:1px solid var(--border);margin:1.25rem 0;" />
+          <label style="display:block;font-size:0.85rem;color:var(--muted);margin-bottom:0.5rem;">Devices receiving notifications</label>
+          <div id="push-devices"></div>
+        </div>
+        </div>
+      </details>
+
       <details class="card" data-sec="sharing">
         <summary class="card-head"><h2>Sharing</h2></summary>
         <div class="card-body">
@@ -1601,9 +1601,9 @@
       try { open = JSON.parse(localStorage.getItem(OPEN_KEY) || 'null'); } catch { open = null; }
       const cards = Array.from(document.querySelectorAll('details.card[data-sec]'));
       cards.forEach((c) => {
-        // First visit: open Setup only. It's the section someone arriving for
-        // the first time actually wants, and one open section shows that the
-        // others expand too.
+        // First visit: open Calendar only. It's the section people actually come
+        // for, and one open section shows the pattern without restoring the wall
+        // of text this replaced.
         c.open = Array.isArray(open) ? open.includes(c.dataset.sec) : c.dataset.sec === 'setup';
       });
       cards.forEach((c) => c.addEventListener('toggle', () => {
