@@ -1298,6 +1298,21 @@
       return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
     }
 
+    // Does an existing browser subscription already use this server's VAPID key?
+    // The browser exposes it as an ArrayBuffer, ours is a base64url string, so
+    // normalise both to compare. If the browser won't tell us (older engines
+    // leave options undefined), assume it differs — resubscribing is harmless,
+    // being stuck unable to enable notifications is not.
+    function sameServerKey(subscription, publicKey) {
+      const raw = subscription.options && subscription.options.applicationServerKey;
+      if (!raw) return false;
+      const bytes = new Uint8Array(raw);
+      let bin = '';
+      for (const b of bytes) bin += String.fromCharCode(b);
+      const b64url = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      return b64url === String(publicKey).replace(/=+$/, '');
+    }
+
     function renderPushPeople() {
       const wrap = document.getElementById('push-people');
       wrap.innerHTML = '';
@@ -1443,6 +1458,26 @@
 
         const reg = await kbServiceWorker();
         const { publicKey } = await api('GET', '/api/push/key');
+
+        // A browser refuses to subscribe when it already holds a subscription
+        // for this origin under a different VAPID key — "A subscription with a
+        // different applicationServerKey already exists". That's not an edge
+        // case here: every Kinboard generates its own keypair on first use, so
+        // moving host, restoring a backup, or migrating onto a fresh data
+        // volume all land exactly here. The browser's own advice is to
+        // unsubscribe and resubscribe, so do that instead of showing the user
+        // a wall of jargon they can't act on.
+        const existing = await reg.pushManager.getSubscription();
+        if (existing && !sameServerKey(existing, publicKey)) {
+          await existing.unsubscribe();
+          // Drop the stale row as well. That endpoint is dead now, and the
+          // server would otherwise keep trying it until a push service
+          // eventually answers 410.
+          try {
+            await api('POST', '/api/push/unsubscribe', { endpoint: existing.endpoint });
+          } catch { /* it may not be registered on this instance at all */ }
+        }
+
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(publicKey),

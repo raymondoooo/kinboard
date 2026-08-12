@@ -1637,6 +1637,19 @@ app.delete('/api/push/subscriptions/:id', auth.requireAuth, async (req, res) => 
   res.json({ ok: true });
 });
 
+// Forget a subscription by its endpoint. Used when the browser had to drop a
+// subscription belonging to a different VAPID key before it could make a new
+// one — that endpoint is dead, and without this the server would keep pushing
+// to it until some push service got round to answering 410. Not an error if
+// it was never registered here; the caller is telling us it's gone either way.
+app.post('/api/push/unsubscribe', auth.requireAuth, async (req, res) => {
+  const endpoint = (req.body && req.body.endpoint) || '';
+  if (!endpoint) return res.status(400).json({ error: 'endpoint required' });
+  const { error } = await db.from('push_subscriptions').delete().eq('endpoint', endpoint);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
+});
+
 // "Send test notification" — proves the whole chain (VAPID → push service →
 // service worker) end to end from the settings page.
 app.post('/api/push/test', auth.requireAuth, async (req, res) => {
