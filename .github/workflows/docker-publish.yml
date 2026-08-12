@@ -476,9 +476,15 @@ jobs:
           # Marked by timestamp rather than grepping cumulative logs — an
           # earlier legitimate request to the same endpoint would otherwise
           # make this check pass for the wrong reason.
+          # --retry-connrefused: this step runs immediately after another test
+          # that brought up its own separate container, and on one run the very
+          # first request here hit the runner mid-blip with a bare connection
+          # refused — kinboard-ci was healthy immediately before and after, per
+          # the job's own logs. curl has a purpose-built retry for exactly this.
           mark1=$(date -u +%Y-%m-%dT%H:%M:%S)
           sleep 1
-          code=$(curl -s -o /tmp/pt.json -w '%{http_code}' -b /tmp/j -X POST "$B/api/push/test" -H 'Content-Type: application/json' -d '{}')
+          code=$(curl -s --retry 5 --retry-connrefused --retry-delay 1 \
+            -o /tmp/pt.json -w '%{http_code}' -b /tmp/j -X POST "$B/api/push/test" -H 'Content-Type: application/json' -d '{}')
           [ "$code" = "400" ] || { echo "FAIL: bodyless test request returned $code, expected 400"; cat /tmp/pt.json; exit 1; }
           docker logs --since "$mark1" kinboard-ci 2>&1 | grep -qE 'wife\.example|son\.example' \
             && { echo "FAIL: a bodyless test request reached another device"; exit 1; }
@@ -486,7 +492,7 @@ jobs:
           # A specific endpoint must still work, and touch only that endpoint.
           mark2=$(date -u +%Y-%m-%dT%H:%M:%S)
           sleep 1
-          curl -s -o /tmp/pt2.json -w '\n%{http_code}\n' -b /tmp/j -X POST "$B/api/push/test" \
+          curl -s --retry 5 --retry-connrefused --retry-delay 1 -o /tmp/pt2.json -w '\n%{http_code}\n' -b /tmp/j -X POST "$B/api/push/test" \
             -H 'Content-Type: application/json' -d '{"endpoint":"https://wife.example/ci-ep"}' | tail -1 | grep -q 200 \
             || { echo "FAIL: a real endpoint did not return 200"; cat /tmp/pt2.json; exit 1; }
           docker logs --since "$mark2" kinboard-ci 2>&1 | grep -q 'son.example' \
