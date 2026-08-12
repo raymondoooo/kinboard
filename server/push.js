@@ -42,11 +42,39 @@ function getPublicKey() {
   return getVapidKeys().publicKey;
 }
 
+// Which push service a subscription belongs to — Apple, Google or Microsoft.
+// Worth logging, because a failure is very often specific to one of them.
+function hostOf(endpoint) {
+  try { return new URL(endpoint).host; } catch { return 'unknown host'; }
+}
+
 // The `mailto:`/URL identifying this server to the push service. Push services
 // use it to contact an operator about misbehaving traffic; it is not required to
 // be reachable, and nothing is sent to it.
+//
+// The default used to be `mailto:kinboard@localhost`, which Apple rejects with a
+// 403: its push service validates the JWT `sub` claim and will not accept a
+// mailto whose domain isn't well formed. Google and Microsoft accept it happily,
+// so push failed *only* on iPhones and iPads — and the sole visible symptom was
+// "Nothing was sent" in Settings. An https URL is accepted everywhere.
+const DEFAULT_VAPID_SUBJECT = 'https://github.com/raymondoooo/kinboard';
+
 function vapidSubject() {
-  return process.env.VAPID_SUBJECT || 'mailto:kinboard@localhost';
+  const configured = (process.env.VAPID_SUBJECT || '').trim();
+  if (!configured) return DEFAULT_VAPID_SUBJECT;
+  // A malformed override resurrects exactly the bug above: silent, and only on
+  // Apple devices. Refuse it rather than sign a claim that can't be delivered.
+  const ok = /^https:\/\/[^\s/]+\.[^\s/]+/i.test(configured)
+    || /^mailto:[^@\s]+@[^@\s.]+\.[^@\s.]+/i.test(configured);
+  if (!ok) {
+    console.warn(
+      `[push] ignoring VAPID_SUBJECT="${configured}" — it must be an https:// URL, or a ` +
+      'mailto: address with a real domain. Apple rejects anything else with a 403. ' +
+      `Falling back to ${DEFAULT_VAPID_SUBJECT}`
+    );
+    return DEFAULT_VAPID_SUBJECT;
+  }
+  return configured;
 }
 
 // Always "available" since the keys self-generate. Kept as a function anyway so
@@ -82,8 +110,17 @@ async function sendToSubscription(sub, payload) {
     if (status === 404 || status === 410) {
       db.raw.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(sub.endpoint);
       console.log(`[push] pruned expired subscription (${status}) ${(sub.label || sub.endpoint).slice(0, 60)}`);
+    } else if (status === 403) {
+      // Almost always the VAPID subject, and almost always Apple. "403: Received
+      // unexpected response code" on its own sent me looking at keys, the
+      // service worker and the payload before the subject.
+      console.error(
+        `[push] rejected (403) by ${hostOf(sub.endpoint)} — the push service refused our ` +
+        `VAPID identity (subject "${vapidSubject()}"). Apple requires an https:// URL or a ` +
+        'mailto: with a real domain; set VAPID_SUBJECT if you have overridden it.'
+      );
     } else {
-      console.error(`[push] send failed (${status || 'no status'}): ${err.message}`);
+      console.error(`[push] send failed to ${hostOf(sub.endpoint)} (${status || 'no status'}): ${err.message}`);
     }
     return false;
   }
