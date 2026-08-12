@@ -3,6 +3,29 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.2.7] — 2026-08-12
+
+### Fixed
+- **The calendar overflowed sideways on smaller and mid-size monitors.** A
+  packed week could force the grid past the width of the window — reproduced
+  at 1366px, a very common laptop resolution, where the grid demanded 1543px
+  and Saturday scrolled off screen entirely. A CSS grid item's automatic
+  minimum width defaults to its content's size, not zero, so the non-shrinking
+  person-badge row inside a busy day could force that whole column — and with
+  it the whole week — wider than the viewport. Fixed with `min-width: 0` down
+  the chain from the grid item to the event row, plus an explicit
+  `overflow-x: hidden` on the grid (setting only `overflow-y` makes a browser
+  compute `overflow-x` as `auto` too, which is what turned this into a
+  sideways-scrolling calendar on top of the intended vertical one).
+- **"Send test notification" could buzz a spouse's or child's phone instead of
+  your own, and report success.** An omitted `endpoint` meant "every
+  subscription in the household" — and the one caller only ever omits it when
+  its own subscription is broken, which is exactly the moment someone reaches
+  for this button. Proved by seeding two other devices and calling the route
+  with an empty body: delivery was attempted to both. The endpoint is now
+  required; a device with nothing to test is told so plainly instead of
+  testing someone else's phone.
+
 ## [0.2.6] — 2026-08-12
 
 ### Fixed

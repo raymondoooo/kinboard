@@ -1651,12 +1651,28 @@ app.post('/api/push/unsubscribe', auth.requireAuth, async (req, res) => {
 });
 
 // "Send test notification" — proves the whole chain (VAPID → push service →
-// service worker) end to end from the settings page.
+// service worker) end to end for THIS device, and only this device.
+//
+// An omitted endpoint used to mean "every subscription in the household" —
+// dead code in practice, since the one caller always sent one when it had a
+// working subscription to send. The failure mode is what makes it dangerous:
+// the moment a device's own subscription is broken (exactly when someone
+// reaches for the test button to find out why) is the moment the client has
+// no endpoint to send, and the request silently fanned out to every other
+// registered device instead — a spouse's or child's phone buzzing with
+// "Notifications are working 🎉" while the person who pressed the button got
+// nothing and, worse, saw a success toast. Proved by seeding two fake
+// subscriptions and calling this route with an empty body: web-push attempted
+// delivery to both. Required and scoped now; broadcasting to the household is
+// something only the digest and reminders should ever do.
 app.post('/api/push/test', auth.requireAuth, async (req, res) => {
   const endpoint = (req.body && req.body.endpoint) || null;
-  const { data: subs, error } = endpoint
-    ? await db.from('push_subscriptions').select('*').eq('endpoint', endpoint)
-    : await db.from('push_subscriptions').select('*');
+  if (!endpoint) {
+    return res.status(400).json({
+      error: 'This device has no active subscription to test. Turn notifications off and back on for this device, then try again.',
+    });
+  }
+  const { data: subs, error } = await db.from('push_subscriptions').select('*').eq('endpoint', endpoint);
   if (error) return res.status(500).json({ error: error.message });
   if (!subs.length) return res.status(404).json({ error: 'No registered devices to notify' });
 

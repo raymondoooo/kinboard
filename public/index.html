@@ -256,6 +256,13 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    /* Explicit, not left to the default. Per spec, setting only overflow-y
+       makes the browser compute overflow-x as auto too — which is what turned
+       this into a horizontally-scrolling grid on top of a vertically-scrolling
+       one. With the min-width:0 chain below there's nothing left that should
+       need to scroll sideways; anything that still does gets clipped instead
+       of dragging the whole week wider than the window. */
+    overflow-x: hidden;
   }
 
   .day-header {
@@ -274,6 +281,16 @@
   .day-header:last-child { border-right: none; }
 
   .day-cell {
+    /* A CSS grid item's automatic minimum width defaults to its content's
+       min-content size, not zero — so a `1fr` column can still be forced wider
+       than its fair share by an un-shrinkable child (here, the person-badge
+       row a few lines down, which is flex-shrink:0 on purpose). Reproduced: on
+       a 1366px-wide window with several multi-person events in a week, the
+       grid demanded 1543px and the 7th day scrolled off screen. min-width:0
+       is what lets a grid item actually shrink to its track's share instead of
+       forcing the whole week wider than the viewport.
+       https://css-tricks.com/preventing-a-grid-blowout/ */
+    min-width: 0;
     border-right: 1px solid var(--grid-line);
     border-bottom: 1px solid var(--grid-line);
     padding: 5px 6px;
@@ -327,12 +344,17 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
+    min-width: 0; /* same reason as .day-cell — a flex column's cross-axis min
+                     defaults to its widest child, not zero */
   }
 
   .event {
     display: flex;
     align-items: center;
     gap: 5px;
+    min-width: 0; /* lets the row itself shrink; .event-text (flex:1, its own
+                     min-width:0, overflow:hidden) is what actually gives up
+                     the space via an earlier ellipsis */
     font-size: var(--event-font);
     line-height: 1.32;
     padding: 3px 9px;

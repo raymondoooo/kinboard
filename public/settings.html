@@ -1540,7 +1540,17 @@
         try {
           const reg = await kbServiceWorker();
           const sub = await reg.pushManager.getSubscription();
-          const res = await api('POST', '/api/push/test', sub ? { endpoint: sub.endpoint } : {});
+          // No fallback to a bodyless request. That used to mean "test every
+          // device in the household" server-side — so on exactly the device
+          // whose subscription is broken (the one moment someone reaches for
+          // this button), it silently buzzed a spouse's or child's phone
+          // instead while reporting success here. If this device has nothing
+          // to test, say so and stop; don't test somebody else's phone instead.
+          if (!sub) {
+            toast('This device isn\'t actually subscribed — turn notifications off and back on, then try again', 'err');
+            return;
+          }
+          const res = await api('POST', '/api/push/test', { endpoint: sub.endpoint });
           toast(res.sent ? 'Test notification sent' : 'Nothing was sent — no active device', res.sent ? 'ok' : 'err');
         } catch (e) {
           toast(e.message, 'err');

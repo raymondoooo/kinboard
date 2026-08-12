@@ -204,6 +204,48 @@ jobs:
           print("all innerHTML interpolations are escaped")
           EOF
 
+      - name: Calendar grid must not overflow horizontally
+        run: |
+          # A CSS grid item's automatic minimum width defaults to its content's
+          # min-content size, not zero, so a `1fr` day column could still be
+          # forced wider than its share by the non-shrinking person-badge row
+          # inside it. Reproduced with a headless browser on a busy week at
+          # 1366px: the grid demanded 1543px and Saturday scrolled off screen.
+          # min-width:0 on the chain from the grid item down, plus explicit
+          # overflow-x on #grid (setting only overflow-y makes a browser
+          # compute overflow-x as auto too, which is what turned this into a
+          # sideways-scrolling calendar), is what stops it. This is a cheap
+          # static guard for that chain, not a layout test — it can't catch
+          # every future way to reintroduce an overflow, only this one.
+          python3 - <<'EOF'
+          import re, sys
+          src = open('public/index.html').read()
+
+          def block(selector):
+              m = re.search(re.escape(selector) + r'\s*\{([^}]*)\}', src)
+              return m.group(1) if m else None
+
+          problems = []
+          for sel in ['.day-cell', '.events', '.event']:
+              b = block(sel)
+              if b is None:
+                  problems.append(f'{sel} rule not found')
+              elif not re.search(r'min-width\s*:\s*0\b', b):
+                  problems.append(f'{sel} is missing min-width: 0')
+
+          grid = block('#grid')
+          if grid is None:
+              problems.append('#grid rule not found')
+          elif not re.search(r'overflow-x\s*:\s*hidden\b', grid):
+              problems.append('#grid is missing overflow-x: hidden')
+
+          if problems:
+              print('FAIL:')
+              [print('  ' + p) for p in problems]
+              sys.exit(1)
+          print('day-cell/events/event min-width chain and #grid overflow-x intact')
+          EOF
+
       - name: Checking a chore off twice must pay once
         run: |
           set -e
@@ -411,6 +453,50 @@ jobs:
           docker exec kinboard-mig node scripts/import-kinevents.js --file /tmp/import.json --data-dir /app/data --force > /tmp/imp2.log 2>&1
           grep -q 'events: 0' /tmp/imp2.log || { echo "FAIL: re-import was not idempotent"; cat /tmp/imp2.log; exit 1; }
           echo "kinevents import works against the current schema"
+
+      - name: Test notification must never fan out to other devices
+        run: |
+          set -e
+          B=http://localhost:3000
+          # Two subscriptions standing in for a spouse's and child's phone.
+          # Neither is Ray's own device, which is the one under test.
+          docker exec kinboard-ci node -e "
+            const db=require('better-sqlite3')('/app/data/kinboard.db');
+            const ins=db.prepare(\"INSERT OR REPLACE INTO push_subscriptions (id,endpoint,p256dh,auth,label,device_id,notify_people,digest_enabled,reminders_enabled,on_add_enabled,reminder_minutes) VALUES (?,?,?,?,?,?,'[]',1,1,1,60)\");
+            ins.run('ci-wife','https://wife.example/ci-ep','k','a','Wife phone','dev-wife-ci');
+            ins.run('ci-son','https://son.example/ci-ep','k','a','Son phone','dev-son-ci');
+          "
+
+          # An omitted endpoint used to mean "every subscription in the
+          # household" — dead in practice, since the one real caller only ever
+          # omits it when ITS OWN subscription is broken. That is exactly the
+          # moment someone reaches for this button, and it silently buzzed a
+          # spouse's or child's phone instead while reporting success.
+          #
+          # Marked by timestamp rather than grepping cumulative logs — an
+          # earlier legitimate request to the same endpoint would otherwise
+          # make this check pass for the wrong reason.
+          mark1=$(date -u +%Y-%m-%dT%H:%M:%S)
+          sleep 1
+          code=$(curl -s -o /tmp/pt.json -w '%{http_code}' -b /tmp/j -X POST "$B/api/push/test" -H 'Content-Type: application/json' -d '{}')
+          [ "$code" = "400" ] || { echo "FAIL: bodyless test request returned $code, expected 400"; cat /tmp/pt.json; exit 1; }
+          docker logs --since "$mark1" kinboard-ci 2>&1 | grep -qE 'wife\.example|son\.example' \
+            && { echo "FAIL: a bodyless test request reached another device"; exit 1; }
+
+          # A specific endpoint must still work, and touch only that endpoint.
+          mark2=$(date -u +%Y-%m-%dT%H:%M:%S)
+          sleep 1
+          curl -s -o /tmp/pt2.json -w '\n%{http_code}\n' -b /tmp/j -X POST "$B/api/push/test" \
+            -H 'Content-Type: application/json' -d '{"endpoint":"https://wife.example/ci-ep"}' | tail -1 | grep -q 200 \
+            || { echo "FAIL: a real endpoint did not return 200"; cat /tmp/pt2.json; exit 1; }
+          docker logs --since "$mark2" kinboard-ci 2>&1 | grep -q 'son.example' \
+            && { echo "FAIL: targeting one endpoint also reached a different device"; exit 1; }
+
+          # Clean up so later steps don't inherit these.
+          for id in ci-wife ci-son; do
+            docker exec kinboard-ci node -e "require('better-sqlite3')('/app/data/kinboard.db').prepare('DELETE FROM push_subscriptions WHERE id=?').run('$id')"
+          done
+          echo "test notification is scoped to the requesting device only"
 
       - name: App must run as a non-root user
         run: |

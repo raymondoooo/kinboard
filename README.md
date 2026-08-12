@@ -24,7 +24,7 @@ docker run -d --name kinboard -p 3200:3200 \
 
 The compose file tracks `latest` and re-checks the registry each time you bring it
 up, so `docker compose up -d` keeps you current. Prefer to stay put? Pin the image
-(`raymondoooo/kinboard:0.2.6`) and remove `pull_policy: always`. Settings shows the
+(`raymondoooo/kinboard:0.2.7`) and remove `pull_policy: always`. Settings shows the
 version you're actually running, either way.
 
 Also on GHCR as `ghcr.io/raymondoooo/kinboard`. To build from a checkout instead, see
