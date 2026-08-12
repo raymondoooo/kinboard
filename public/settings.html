@@ -52,13 +52,46 @@
 
     h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 1.5rem; }
 
+    /* Sections collapse. Eleven stacked cards made this a very long scroll on a
+       phone, where most visits are to change one thing. Built on <details>
+       rather than JS so it works with the keyboard, reads correctly to a screen
+       reader, and — importantly — keeps every control in the DOM, which is what
+       the save-everything button and the load-time wiring both rely on. */
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 12px;
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
+      margin-bottom: 0.75rem;
+      overflow: hidden;
     }
+    .card-head {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 1rem 1.25rem;
+      cursor: pointer;
+      list-style: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .card-head::-webkit-details-marker { display: none; }  /* Safari's default triangle */
+    .card-head:hover { background: rgba(127, 127, 127, 0.06); }
+    .card-head h2 { margin: 0; flex: 1; }
+    /* Chevron drawn in CSS, so the page still ships no external assets. */
+    .card-head::after {
+      content: '';
+      width: 0.5rem; height: 0.5rem;
+      border-right: 2px solid var(--muted);
+      border-bottom: 2px solid var(--muted);
+      transform: rotate(-45deg);
+      transition: transform 0.18s ease;
+      flex-shrink: 0;
+    }
+    .card[open] > .card-head::after { transform: rotate(45deg); }
+    .card[open] > .card-head { border-bottom: 1px solid var(--border); }
+    .card-body { padding: 1.25rem; }
+    @media (prefers-reduced-motion: reduce) { .card-head::after { transition: none; } }
+
     .card h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.3rem; }
     .card .section-sub { font-size: 0.85rem; color: var(--muted); margin-bottom: 1.25rem; }
 
@@ -272,8 +305,9 @@
       <h1 id="page-title">Calendar settings</h1>
 
       <!-- Share & subscribe -->
-      <div class="card">
-        <h2>Share &amp; subscribe</h2>
+      <details class="card" data-sec="share-and-subscribe">
+        <summary class="card-head"><h2>Share &amp; subscribe</h2></summary>
+        <div class="card-body">
         <p class="section-sub">Give grandparents, sitters, or a co-parent a view-only link, or subscribe this calendar into Google/Apple Calendar so it shows up on everyone's phone. Anyone with a link can view — but not edit. Turn it off anytime.</p>
 
         <label style="display:block;font-size:0.85rem;color:var(--muted);margin-bottom:0.25rem;">Auto-share events matching these words</label>
@@ -302,43 +336,53 @@
           </div>
           <button class="add-btn" id="share-revoke-btn" type="button" style="margin-top:0.75rem;">Turn off sharing</button>
         </div>
-      </div>
+        </div>
+      </details>
 
       <!-- Family -->
-      <div class="card">
-        <h2>Family</h2>
+      <details class="card" data-sec="family">
+        <summary class="card-head"><h2>Family</h2></summary>
+        <div class="card-body">
         <p class="section-sub">The people on this calendar. Each has a color and an optional emoji. (Everyone shares the one household password — this is just how they're labeled on events.)</p>
         <div id="members-list"></div>
         <div class="section-actions">
           <button class="add-btn" id="add-member">+ Add a person</button>
         </div>
-      </div>
+        </div>
+      </details>
 
       <!-- Categories -->
-      <div class="card">
-        <h2>Categories</h2>
+      <details class="card" data-sec="categories">
+        <summary class="card-head"><h2>Categories</h2></summary>
+        <div class="card-body">
         <p class="section-sub">Shared event types — assign calendars or events to these to color them as a group.</p>
         <div id="categories-list"></div>
-      </div>
+        </div>
+      </details>
 
       <!-- Holidays -->
-      <div class="card">
-        <h2>Holidays</h2>
+      <details class="card" data-sec="holidays">
+        <summary class="card-head"><h2>Holidays</h2></summary>
+        <div class="card-body">
         <p class="section-sub">These appear automatically on your calendar on the right dates each year.</p>
         <div class="holiday-grid" id="holiday-grid"></div>
-      </div>
+        </div>
+      </details>
 
       <!-- Calendars -->
-      <div class="card">
-        <h2>Calendars</h2>
+      <details class="card" data-sec="calendars">
+        <summary class="card-head"><h2>Calendars</h2></summary>
+        <div class="card-body">
         <p class="section-sub">Imported iCal feeds — school, sports, work. Assign each to a person or category.</p>
         <div id="feeds-list"></div>
         <button class="add-btn" id="add-feed">+ Add a calendar feed</button>
-      </div>
+        </div>
+      </details>
 
       <!-- Import a calendar (one-time migration, not a live feed) -->
-      <div class="card">
-        <h2>Import a calendar</h2>
+      <details class="card" data-sec="import-a-calendar">
+        <summary class="card-head"><h2>Import a calendar</h2></summary>
+        <div class="card-body">
         <p class="section-sub">One-time migration from Google, Apple, Outlook, or any iCal link — copies events in as native, fully-editable events on this calendar. Unlike a feed above, it does not stay live-synced.</p>
 
         <div class="field">
@@ -377,11 +421,13 @@
           <button class="btn btn-sm" id="import-run-btn" type="button" style="display:none;">Import now</button>
         </div>
         <p class="hint" id="import-result" style="display:none;"></p>
-      </div>
+        </div>
+      </details>
 
       <!-- Calendar settings -->
-      <div class="card">
-        <h2>Calendar</h2>
+      <details class="card" data-sec="calendar">
+        <summary class="card-head"><h2>Calendar</h2></summary>
+        <div class="card-body">
         <p class="section-sub">Name, weather, layout, theme, and visibility.</p>
 
         <div class="field">
@@ -458,11 +504,13 @@
             </label>
           </div>
         </div>
-      </div>
+        </div>
+      </details>
 
       <!-- Chores & points -->
-      <div class="card">
-        <h2>Chores &amp; points</h2>
+      <details class="card" data-sec="chores-and-points">
+        <summary class="card-head"><h2>Chores &amp; points</h2></summary>
+        <div class="card-body">
         <p class="section-sub">You give each chore a point value on the To-Do tab — points are just how you set what a chore is worth relative to the others. The family never sees them: everyone sees what they've earned in money.</p>
 
         <div class="field">
@@ -473,11 +521,13 @@
           </div>
           <div class="hint">Kinboard tracks earnings every time a chore is completed — including repeating ones, every time round. <strong>Until you set a value above, nothing is shown to the family.</strong></div>
         </div>
-      </div>
+        </div>
+      </details>
 
       <!-- Notifications -->
-      <div class="card">
-        <h2>Notifications</h2>
+      <details class="card" data-sec="notifications">
+        <summary class="card-head"><h2>Notifications</h2></summary>
+        <div class="card-body">
         <p class="section-sub">Get a push notification on this device for today's schedule, upcoming events, and anything newly added for the people you care about.</p>
 
         <!-- Shown when the browser can't do Web Push (plain HTTP, or unsupported). -->
@@ -564,11 +614,13 @@
           <label style="display:block;font-size:0.85rem;color:var(--muted);margin-bottom:0.5rem;">Devices receiving notifications</label>
           <div id="push-devices"></div>
         </div>
-      </div>
+        </div>
+      </details>
 
       <!-- Account -->
-      <div class="card">
-        <h2>Household password</h2>
+      <details class="card" data-sec="household-password">
+        <summary class="card-head"><h2>Household password</h2></summary>
+        <div class="card-body">
         <p class="section-sub">Everyone who knows this password can view and edit the calendar. Changing it signs out every other device.</p>
         <div class="field">
           <label>Current password</label>
@@ -579,14 +631,17 @@
           <input type="password" id="pw-new" autocomplete="new-password" minlength="6" />
         </div>
         <button class="btn" id="pw-save" type="button">Change password</button>
-      </div>
+        </div>
+      </details>
 
       <!-- Donate -->
-      <div class="card" id="donate-card" style="display:none;">
-        <h2>Support Kinboard</h2>
+      <details class="card" data-sec="support-kinboard" id="donate-card" style="display:none;">
+        <summary class="card-head"><h2>Support Kinboard</h2></summary>
+        <div class="card-body">
         <p class="section-sub">Kinboard is free, self-hosted software. If it's useful to your family, a small donation helps keep it maintained.</p>
         <a class="add-btn" id="donate-link" href="#" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;">Donate →</a>
-      </div>
+        </div>
+      </details>
     </div>
   </div>
 
@@ -1524,7 +1579,40 @@
       show('main');
     }
 
+    // Remember which sections were left open, per device. Someone who comes here
+    // to adjust chores every week shouldn't have to re-open that section every
+    // time — and someone who never touches Holidays shouldn't scroll past it.
+    const OPEN_KEY = 'kb_settings_open';
+    function restoreOpenSections() {
+      let open;
+      try { open = JSON.parse(localStorage.getItem(OPEN_KEY) || 'null'); } catch { open = null; }
+      const cards = Array.from(document.querySelectorAll('details.card[data-sec]'));
+      cards.forEach((c) => {
+        // First visit: open Calendar only. It's the section people actually come
+        // for, and one open section shows the pattern without restoring the wall
+        // of text this replaced.
+        c.open = Array.isArray(open) ? open.includes(c.dataset.sec) : c.dataset.sec === 'calendar';
+      });
+      cards.forEach((c) => c.addEventListener('toggle', () => {
+        const nowOpen = cards.filter((x) => x.open).map((x) => x.dataset.sec);
+        try { localStorage.setItem(OPEN_KEY, JSON.stringify(nowOpen)); } catch { /* private mode */ }
+      }));
+    }
+
+    // Deep links and in-page anchors have to win over the remembered state,
+    // otherwise following one lands you on a collapsed section.
+    function openSectionFromHash() {
+      const id = (location.hash || '').replace('#', '');
+      if (!id) return;
+      const el = document.getElementById(id) || document.querySelector(`details.card[data-sec="${CSS.escape(id)}"]`);
+      const card = el && el.closest('details.card');
+      if (card) { card.open = true; card.scrollIntoView({ block: 'start' }); }
+    }
+
     async function init() {
+      restoreOpenSections();
+      openSectionFromHash();
+      window.addEventListener('hashchange', openSectionFromHash);
       // Wire the push UI before loading: initPushUi() decides whether the card
       // is even shown, and that shouldn't depend on the API call succeeding.
       initPushUi();
