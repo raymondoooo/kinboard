@@ -20,6 +20,18 @@ cp .env.example .env
 docker compose up --build
 ```
 
+**Running it on a server, with compose?** Use `docker-compose.prod.yml` rather than
+copying `docker-compose.yml` across. That one builds from this repo, so on a machine
+without the source it fails on `build: .`, then on a missing `.env` — and its project
+name collides with any other Kinboard on the same host, which means `docker compose up`
+from the wrong directory can re-point an existing instance at an empty data folder.
+`docker-compose.prod.yml` pulls a pinned published image and needs only itself plus
+an optional `.env`:
+
+```sh
+docker compose -f docker-compose.prod.yml up -d
+```
+
 Open `http://localhost:3200` (or whatever host you're running this on) and follow the
 one-time setup screen: pick a calendar name and time zone, and choose the household
 password everyone in your family will use to sign in. There are no individual accounts —

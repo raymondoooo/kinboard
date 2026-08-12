@@ -5,7 +5,17 @@ means the shape of things can still change between minor releases.
 
 ## [Unreleased]
 
+### Added
+- **`docker-compose.prod.yml`** — a compose file meant for a server: a pinned
+  published image, its own project name, and no source checkout required.
+
 ### Fixed
+- **Upgrading mid-morning sent a second daily digest.** The new
+  `last_digest_date` column starts empty, and the catch-up window runs for three
+  hours after the digest hour, so an instance restarted at 07:38 decided the day
+  had been missed and repeated it. The migration now backfills today's date when
+  the digest would already have gone out — and deliberately doesn't when you
+  upgrade before the digest hour, so today's still fires.
 - **The Home Screen icon was a plain letter tile on iPhone.** iOS uses the icon
   declared by the page you add to the Home Screen, and only the calendar page
   declared one — so installing from Settings, which is exactly where the "add to

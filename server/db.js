@@ -97,6 +97,28 @@ const MIGRATIONS = [
       // five minutes, it didn't go out at all. Recording the day it last went
       // makes both impossible.
       ensureColumn('settings', 'last_digest_date', 'text');
+
+      // Backfill, or upgrading mid-morning sends a duplicate digest: the new
+      // column starts NULL, the catch-up window runs for three hours after the
+      // digest hour, so an instance restarted at 07:38 immediately decides today
+      // has been missed and sends a second one. Only backfill when today's
+      // digest would already have gone out under the old code — upgrading
+      // *before* the digest hour must still leave today's to fire normally.
+      const row = raw.prepare('SELECT time_zone FROM settings WHERE id = 1').get();
+      if (!row) return; // fresh install; nothing has been sent yet
+      const digestHour = Number.isInteger(+process.env.DIGEST_HOUR) ? +process.env.DIGEST_HOUR : 7;
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: row.time_zone || 'America/New_York',
+        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23',
+      }).formatToParts(new Date());
+      const g = (t) => parts.find((p) => p.type === t).value;
+      let hour = +g('hour');
+      if (hour === 24) hour = 0;
+      if (hour > digestHour) {
+        const today = `${g('year')}-${g('month')}-${g('day')}`;
+        raw.prepare('UPDATE settings SET last_digest_date = ? WHERE id = 1').run(today);
+        console.log(`[db] marked today's digest (${today}) as already sent, so upgrading doesn't repeat it`);
+      }
     },
   },
 ];
