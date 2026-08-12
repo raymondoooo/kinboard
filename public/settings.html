@@ -105,6 +105,12 @@
     .card-body { padding: 1.25rem; }
     @media (prefers-reduced-motion: reduce) { .card-head::after { transition: none; } }
 
+    .version-line {
+      text-align: center; font-size: 0.75rem; color: var(--muted);
+      margin: 1.5rem 0 0.5rem;
+    }
+    .version-line span { font-variant-numeric: tabular-nums; }
+
     .card h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.3rem; }
     .card .section-sub { font-size: 0.85rem; color: var(--muted); margin-bottom: 1.25rem; }
 
@@ -655,6 +661,12 @@
         <a class="add-btn" id="donate-link" href="#" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;">Donate →</a>
         </div>
       </details>
+
+      <!-- Which version is actually running. "latest" in a compose file says
+           nothing about what got pulled, and Docker reuses a cached tag without
+           re-checking the registry, so an instance can sit on an old image
+           indefinitely with nothing on screen to say so. -->
+      <p class="version-line">Kinboard <span id="app-version">…</span></p>
     </div>
   </div>
 
@@ -1572,6 +1584,8 @@
       buildTzSelect(config.timeZone || 'America/New_York');
       document.getElementById('set-firstday').value = String(config.firstDayOfWeek ?? 0);
       document.getElementById('set-weeks').value = String(config.weeksToShow ?? 4);
+      document.getElementById('app-version').textContent =
+        config.version ? 'v' + config.version : 'version unknown';
       document.getElementById('set-public').checked = !!config.isPublic;
       wasPublic = !!config.isPublic;
       syncPublicWarning();

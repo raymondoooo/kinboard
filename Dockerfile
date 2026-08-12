@@ -23,6 +23,12 @@ RUN apk add --no-cache su-exec
 
 WORKDIR /app
 
+# Stamped by CI from the git tag. Without it — a plain `docker build` — the app
+# falls back to package.json and marks itself as a dev build, so a hand-built
+# image is never mistaken for a release.
+ARG KINBOARD_VERSION=""
+ENV KINBOARD_VERSION=${KINBOARD_VERSION}
+
 # The compiled native binding lives inside node_modules, so copying the tree
 # across is all that's needed — no rebuild, no toolchain.
 COPY --from=build /app/node_modules ./node_modules

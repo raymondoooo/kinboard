@@ -3,6 +3,21 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.2.4] — 2026-08-12
+
+### Added
+- **The running version is shown at the bottom of Settings.** There was no way
+  to tell from inside the app which build you were on — and `latest` in a
+  compose file tells you nothing, because Docker reuses a cached tag without
+  re-checking the registry. CI stamps the version from the git tag at build
+  time; an image built by hand reports `-dev` so it can't be mistaken for a
+  release.
+
+### Fixed
+- `package.json` still said `0.1.0` after three releases. It's now the fallback
+  version the app reports, and CI refuses to publish a tag that disagrees with
+  it.
+
 ## [0.2.3] — 2026-08-12
 
 ### Fixed

@@ -1,7 +1,7 @@
 {
   "name": "kinboard",
-  "version": "0.1.0",
-  "description": "Self-hosted family calendar — single Docker container, SQLite, one shared household password",
+  "version": "0.2.4",
+  "description": "Self-hosted family calendar \u2014 single Docker container, SQLite, one shared household password",
   "license": "AGPL-3.0-or-later",
   "main": "server/index.js",
   "scripts": {
