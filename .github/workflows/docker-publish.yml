@@ -166,6 +166,14 @@ jobs:
           [ "$code" = "400" ] || { echo "FAIL: malformed JSON returned $code, expected 400"; exit 1; }
           echo "missing rows and bad bodies answer 4xx"
 
+      - name: Page structure must be intact
+        run: |
+          # Nesting, not tag balance. A settings reorder once moved seven
+          # sections out of the page container and into <head>. Every tag was
+          # still balanced, so a balance check passed and a visibly broken page
+          # shipped in a release.
+          python3 scripts/check-page-structure.py 'public/*.html'
+
       - name: No unescaped interpolation into innerHTML
         run: |
           # The share page is public and renders titles that can come straight

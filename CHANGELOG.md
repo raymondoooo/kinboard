@@ -3,6 +3,18 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.2.3] — 2026-08-12
+
+### Fixed
+- **The settings page was broken in 0.2.2.** Seven sections rendered above the
+  header, full-width and outside the page container — they had been moved into
+  `<head>`. The reorder script that produced 0.2.2 used a multi-line regex to
+  pick up each section's leading comment, and it swallowed everything from the
+  `<head>` icon comment down to the first section: `</head>`, `<body>`, the
+  container and the header all travelled with that section when it moved. The
+  page's tags stayed perfectly balanced, so the check in place at the time saw
+  nothing wrong. CI now verifies where elements sit, not just that they close.
+
 ## [0.2.2] — 2026-08-12
 
 ### Changed
