@@ -6,6 +6,14 @@ means the shape of things can still change between minor releases.
 ## [Unreleased]
 
 ### Fixed
+- **Subscribed calendars never triggered notifications.** The calendar page
+  merged iCal feed events and so did the share page, but the digest and
+  reminders only ever read events typed into Kinboard. Subscribe to a school or
+  team calendar — the reason the feed feature exists — and you were reminded
+  about none of it, with nothing in the logs to say so. Feed occurrences are
+  now merged into both, converted from the UTC instant a feed carries to the
+  household-local wall clock the rest of the notification code assumes; without
+  that conversion a feed event lands on the wrong day and is silently dropped.
 - **Checking a chore off twice paid twice.** Nothing verified the chore was
   actually changing state, so a second tap on an already-done chore wrote a
   second ledger entry — no concurrency needed. Worse, five simultaneous

@@ -273,6 +273,55 @@ jobs:
             process.exit(bad?1:0);
           "
 
+      - name: Subscribed calendars must trigger reminders too
+        run: |
+          set -e
+          B=http://localhost:3000
+          GW=$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}')
+          mkdir -p /tmp/ics2 && cd /tmp/ics2
+          python3 - <<'EOF'
+          import datetime
+          t = datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=62)
+          s = t.strftime('%Y%m%dT%H%M00Z')
+          e = (t + datetime.timedelta(hours=1)).strftime('%Y%m%dT%H%M00Z')
+          open('team.ics','w').write(
+            'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:g1\r\n'
+            f'DTSTAMP:{s}\r\nDTSTART:{s}\r\nDTEND:{e}\r\n'
+            'SUMMARY:Feed practice\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n')
+          EOF
+          python3 -m http.server 8897 --bind 0.0.0.0 >/dev/null 2>&1 &
+          sleep 1
+          curl -fsS -b /tmp/j -X POST "$B/api/feeds" -H 'Content-Type: application/json' \
+            -d "{\"url\":\"http://$GW:8897/team.ics\",\"label\":\"Team\"}" >/dev/null
+
+          # A typed-in event at the same offset, as the control.
+          docker exec kinboard-ci node -e "
+            const db=require('better-sqlite3')('/app/data/kinboard.db');
+            const t=new Date(Date.now()+62*60000);
+            const p=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(t);
+            const g=k=>p.find(x=>x.type==k).value;
+            db.prepare(\"INSERT INTO events (id,title,date,start_time,end_time,all_day,people) VALUES (?,?,?,?,?,0,'[]')\")
+              .run(require('crypto').randomUUID(),'Typed practice',g('year')+'-'+g('month')+'-'+g('day'),g('hour')+':'+g('minute')+':00',g('hour')+':'+g('minute')+':00');
+            db.prepare(\"INSERT OR REPLACE INTO push_subscriptions (id,endpoint,p256dh,auth,label,device_id,notify_people,digest_enabled,reminders_enabled,on_add_enabled,reminder_minutes) VALUES (?,?,?,?,?,?,'[]',1,1,1,60)\")
+              .run(require('crypto').randomUUID(),'https://fake.invalid/e','k','a','CI phone','dev-ci');
+          "
+
+          # Stub the transport so this tests which occurrences the trigger
+          # SELECTS, not whether a push service is reachable. PORT is overridden
+          # because requiring notify pulls in index, which binds a port.
+          out=$(docker exec -e PORT=3999 kinboard-ci node -e "
+            const push=require('/app/server/push.js');
+            push.sendToSubscription=async(s,p)=>{ console.log('SEL:'+p.title); return true; };
+            const notify=require('/app/server/notify.js');
+            (async()=>{ await notify.checkDueReminders(); process.exit(0); })();
+          " 2>&1)
+          echo "$out" | grep -q 'SEL:Typed practice' || { echo "FAIL: typed-in event did not trigger a reminder"; echo "$out"; exit 1; }
+          # Feed events carry a UTC instant while typed-in events are floating
+          # local wall-clock. Merging them without converting silently files a
+          # feed event under the wrong day, so it never fires.
+          echo "$out" | grep -q 'SEL:Feed practice' || { echo "FAIL: subscribed calendar did not trigger a reminder"; echo "$out"; exit 1; }
+          echo "typed-in and subscribed events both trigger reminders"
+
       - name: App must run as a non-root user
         run: |
           # Read the numeric uid of PID 1 from /proc rather than parsing `ps`.
