@@ -66,13 +66,16 @@ if [ ! -s "$OUT" ] || ! grep -q '"tenant"' "$OUT"; then
   exit 1
 fi
 
-python3 - "$OUT" <<'EOPY' 2>/dev/null || echo "Wrote $OUT" >&2
+# The summary used to print to stderr while this same line sent stderr to
+# /dev/null, so a successful export said nothing at all and looked like it had
+# silently failed. Print to stdout, and only hide errors from the fallback.
+python3 - "$OUT" <<'EOPY' || echo "Wrote $OUT"
 import json,sys
 d=json.load(open(sys.argv[1]))
-print(f"Wrote {sys.argv[1]}: {d['tenant']['name']} — "
-      f"{len(d['members'])} members, {len(d['events'])} events, "
-      f"{len(d['feeds'])} feeds, {len(d['meals'])} meals, {len(d['todos'])} todos",
-      file=sys.stderr)
+t=d['tenant']
+print(f"Wrote {sys.argv[1]}: {t['name']}")
+print(f"  {len(d['members'])} members, {len(d['events'])} events, "
+      f"{len(d['feeds'])} feeds, {len(d['meals'])} meals, {len(d['todos'])} todos")
 EOPY
 
 echo "" >&2
