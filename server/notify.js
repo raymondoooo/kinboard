@@ -340,7 +340,11 @@ async function runDigest() {
     .sort((a, b) => String(a.start).localeCompare(String(b.start)));
   const subs = allSubscriptions().filter((s) => s.digest_enabled);
 
-  const title = `${settings.name || 'Today'} — today's schedule`;
+  // Short on purpose. Every push service already shows which app sent this, so
+  // leading with the household name repeated it and pushed the useful part off
+  // the end: "Kinboard-DeChristie — today..." was all a lock screen had room
+  // for. The body carries the actual schedule; the title just says what it is.
+  const title = 'Today';
 
   let sent = 0;
   for (const sub of subs) {
@@ -349,7 +353,10 @@ async function runDigest() {
     // send a daily "nothing today" push, which trains people to ignore it.
     if (!mine.length) continue;
     const body = mine.map((o) => `${timeLabel(o)} · ${o.title}`).join('\n');
-    if (await push.sendToSubscription(sub, { title, body, url: '/', tag: `digest-${today}` })) sent++;
+    // Count goes in the title only when there's more than one, so a single-event
+    // day reads "Today / 2:00pm · Krise" rather than "Today · 1 event".
+    const deviceTitle = mine.length > 1 ? `${title} · ${mine.length} events` : title;
+    if (await push.sendToSubscription(sub, { title: deviceTitle, body, url: '/', tag: `digest-${today}` })) sent++;
   }
 
   if (occs.length) {

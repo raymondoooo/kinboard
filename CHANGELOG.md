@@ -6,6 +6,16 @@ means the shape of things can still change between minor releases.
 ## [Unreleased]
 
 ### Fixed
+- **The Home Screen icon was a plain letter tile on iPhone.** iOS uses the icon
+  declared by the page you add to the Home Screen, and only the calendar page
+  declared one — so installing from Settings, which is exactly where the "add to
+  Home Screen first" instruction sends iPhone users, produced a generated "K"
+  tile and named the app after that page. Every page now carries the icon set,
+  the manifest and an explicit app title.
+- **Notification titles were too long to read.** The daily digest led with the
+  household name, which the push service already displays, so a lock screen
+  showed "Kinboard-DeChristie — today..." and nothing useful. It is now "Today",
+  or "Today · 3 events" when there's more than one.
 - **Push never worked on iPhones or iPads.** The default VAPID subject was
   `mailto:kinboard@localhost`. Apple validates that claim and rejects it with a
   403; Google and Microsoft accept it, so notifications worked on Android and

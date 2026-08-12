@@ -4,6 +4,19 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Link not found · Kinboard</title>
+  <!-- iOS uses the icon declared by THE PAGE YOU ADD to the Home Screen, not
+       the one on your start page. These links lived only on index.html, so
+       installing from Settings — which is exactly where the "add to Home Screen
+       first" instruction sends iPhone users — produced a generated letter tile
+       instead of the app icon. Every page that can be installed needs them. -->
+  <meta name="theme-color" content="#0f1117" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Kinboard" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png" />
+  <link rel="manifest" href="/manifest.json" />
   <style>
     body { margin:0; font-family:-apple-system,"Segoe UI",Roboto,sans-serif; background:#0f1117; color:#e7e9ee; display:flex; min-height:100vh; align-items:center; justify-content:center; }
     .box { text-align:center; padding:24px; }
