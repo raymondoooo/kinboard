@@ -3,6 +3,15 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.2.5] — 2026-08-12
+
+### Fixed
+- **Importing from kinevents created duplicate categories.** A Kinboard is
+  seeded with Family, Birthday, Anniversary and Holiday, and kinevents has the
+  same four under different ids — so matching members by id alone gave every
+  migrated household two of each. Members are now matched by name, which is the
+  right key anyway: events store `people` as display names, not member ids.
+
 ## [0.2.4] — 2026-08-12
 
 ### Added
