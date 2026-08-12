@@ -352,6 +352,32 @@
         </div>
       </details>
 
+      <!-- Donate -->
+      <details class="card" data-sec="support-kinboard" id="donate-card" style="display:none;">
+        <summary class="card-head"><h2>Support Kinboard</h2></summary>
+        <div class="card-body">
+        <p class="section-sub">Kinboard is free, self-hosted software. If it's useful to your family, a small donation helps keep it maintained.</p>
+        <a class="add-btn" id="donate-link" href="#" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;">Donate →</a>
+        </div>
+      </details>
+
+      <!-- Account -->
+      <details class="card" data-sec="household-password">
+        <summary class="card-head"><h2>Household password</h2></summary>
+        <div class="card-body">
+        <p class="section-sub">Everyone who knows this password can view and edit the calendar. Changing it signs out every other device.</p>
+        <div class="field">
+          <label>Current password</label>
+          <input type="password" id="pw-current" autocomplete="current-password" />
+        </div>
+        <div class="field">
+          <label>New password</label>
+          <input type="password" id="pw-new" autocomplete="new-password" minlength="6" />
+        </div>
+        <button class="btn" id="pw-save" type="button">Change password</button>
+        </div>
+      </details>
+
       <!-- Family -->
       <details class="card" data-sec="family">
         <summary class="card-head"><h2>Family</h2></summary>
@@ -373,153 +399,6 @@
         </div>
       </details>
 
-      <!-- Holidays -->
-      <details class="card" data-sec="holidays">
-        <summary class="card-head"><h2>Holidays</h2></summary>
-        <div class="card-body">
-        <p class="section-sub">These appear automatically on your calendar on the right dates each year.</p>
-        <div class="holiday-grid" id="holiday-grid"></div>
-        </div>
-      </details>
-
-      <!-- Calendars -->
-      <details class="card" data-sec="calendars">
-        <summary class="card-head"><h2>Calendars</h2></summary>
-        <div class="card-body">
-        <p class="section-sub">Imported iCal feeds — school, sports, work. Assign each to a person or category.</p>
-        <div id="feeds-list"></div>
-        <button class="add-btn" id="add-feed">+ Add a calendar feed</button>
-        </div>
-      </details>
-
-      <!-- Import a calendar (one-time migration, not a live feed) -->
-      <details class="card" data-sec="import-a-calendar">
-        <summary class="card-head"><h2>Import a calendar</h2></summary>
-        <div class="card-body">
-        <p class="section-sub">One-time migration from Google, Apple, Outlook, or any iCal link — copies events in as native, fully-editable events on this calendar. Unlike a feed above, it does not stay live-synced.</p>
-
-        <div class="field">
-          <label for="import-url">iCal URL</label>
-          <input id="import-url" type="text" placeholder="https://calendar.google.com/calendar/ical/…" />
-        </div>
-
-        <div class="field">
-          <label for="import-person">Assign unmatched events to</label>
-          <select id="import-person"></select>
-        </div>
-
-        <div class="field">
-          <label for="import-range">Date range</label>
-          <select id="import-range">
-            <option value="future" selected>All future events</option>
-            <option value="year">This year forward</option>
-            <option value="all">All events</option>
-            <option value="custom">Custom range…</option>
-          </select>
-        </div>
-
-        <div class="row-2" id="import-custom-range" style="display:none;">
-          <div class="field">
-            <label for="import-start">From</label>
-            <input id="import-start" type="date" />
-          </div>
-          <div class="field">
-            <label for="import-end">To</label>
-            <input id="import-end" type="date" />
-          </div>
-        </div>
-
-        <div class="section-actions">
-          <button class="add-btn" id="import-preview-btn" type="button">Preview</button>
-          <button class="btn btn-sm" id="import-run-btn" type="button" style="display:none;">Import now</button>
-        </div>
-        <p class="hint" id="import-result" style="display:none;"></p>
-        </div>
-      </details>
-
-      <!-- Calendar settings -->
-      <details class="card" data-sec="calendar">
-        <summary class="card-head"><h2>Calendar</h2></summary>
-        <div class="card-body">
-        <p class="section-sub">Name, weather, layout, theme, and visibility.</p>
-
-        <div class="field">
-          <label>Calendar name</label>
-          <input type="text" id="set-name" maxlength="60" />
-        </div>
-
-        <div class="field">
-          <label>ZIP code <span class="opt-note">· for weather</span></label>
-          <div class="row-2">
-            <input type="text" id="set-zip" placeholder="90210" maxlength="5" inputmode="numeric" />
-            <select id="set-units">
-              <option value="fahrenheit">°F</option>
-              <option value="celsius">°C</option>
-            </select>
-          </div>
-          <div class="hint">Leave blank to hide weather. Looked up via the free, keyless Zippopotam.us + Open-Meteo APIs.</div>
-        </div>
-
-        <div class="field row-2">
-          <div>
-            <label>Time zone</label>
-            <select id="set-tz"></select>
-          </div>
-          <div>
-            <label>Week starts on</label>
-            <select id="set-firstday">
-              <option value="0">Sunday</option>
-              <option value="1">Monday</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="field">
-          <label>Weeks to show</label>
-          <select id="set-weeks">
-            <option value="2">2 weeks</option>
-            <option value="3">3 weeks</option>
-            <option value="4">4 weeks</option>
-            <option value="5">5 weeks</option>
-            <option value="6">6 weeks</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label>Theme</label>
-          <div class="theme-grid" id="theme-grid"></div>
-        </div>
-
-        <!-- Wording matters here. "Anyone with the link" (the old label) reads
-             like the Share link below it — an unguessable URL showing only the
-             events you tagged. This toggle is not that: it removes the password
-             from the calendar itself, so every event, time and location is
-             readable by anyone who reaches this address. -->
-        <div class="field">
-          <div class="toggle-field">
-            <div>
-              <div class="toggle-label">Turn off the password (public calendar)</div>
-              <div class="toggle-desc">
-                Lets <strong>anyone who can reach this address</strong> read the whole
-                calendar — every event, time, person and location — with no password.
-                This is not the Share link: it has no secret URL and no keyword filter.
-                Off = the household password is required to view.
-              </div>
-              <div class="toggle-warn" id="public-warn">
-                This calendar is readable by anyone who can reach it. If it is exposed to
-                the internet, that means anyone at all. To share only some events instead,
-                turn this off and use the <strong>Share link</strong> section below.
-              </div>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="set-public" />
-              <span class="track"></span>
-            </label>
-          </div>
-        </div>
-        </div>
-      </details>
-
       <!-- Chores & points -->
       <details class="card" data-sec="chores-and-points">
         <summary class="card-head"><h2>Chores &amp; points</h2></summary>
@@ -534,6 +413,15 @@
           </div>
           <div class="hint">Kinboard tracks earnings every time a chore is completed — including repeating ones, every time round. <strong>Until you set a value above, nothing is shown to the family.</strong></div>
         </div>
+        </div>
+      </details>
+
+      <!-- Holidays -->
+      <details class="card" data-sec="holidays">
+        <summary class="card-head"><h2>Holidays</h2></summary>
+        <div class="card-body">
+        <p class="section-sub">These appear automatically on your calendar on the right dates each year.</p>
+        <div class="holiday-grid" id="holiday-grid"></div>
         </div>
       </details>
 
@@ -630,29 +518,141 @@
         </div>
       </details>
 
-      <!-- Account -->
-      <details class="card" data-sec="household-password">
-        <summary class="card-head"><h2>Household password</h2></summary>
+      <!-- Calendars -->
+      <details class="card" data-sec="subscribe-to-a-calendar">
+        <summary class="card-head"><h2>Subscribe to a calendar</h2></summary>
         <div class="card-body">
-        <p class="section-sub">Everyone who knows this password can view and edit the calendar. Changing it signs out every other device.</p>
-        <div class="field">
-          <label>Current password</label>
-          <input type="password" id="pw-current" autocomplete="current-password" />
-        </div>
-        <div class="field">
-          <label>New password</label>
-          <input type="password" id="pw-new" autocomplete="new-password" minlength="6" />
-        </div>
-        <button class="btn" id="pw-save" type="button">Change password</button>
+        <p class="section-sub">Imported iCal feeds — school, sports, work. Assign each to a person or category.</p>
+        <div id="feeds-list"></div>
+        <button class="add-btn" id="add-feed">+ Add a calendar feed</button>
         </div>
       </details>
 
-      <!-- Donate -->
-      <details class="card" data-sec="support-kinboard" id="donate-card" style="display:none;">
-        <summary class="card-head"><h2>Support Kinboard</h2></summary>
+      <!-- Import a calendar (one-time migration, not a live feed) -->
+      <details class="card" data-sec="ingest-a-calendar">
+        <summary class="card-head"><h2>Ingest a calendar</h2></summary>
         <div class="card-body">
-        <p class="section-sub">Kinboard is free, self-hosted software. If it's useful to your family, a small donation helps keep it maintained.</p>
-        <a class="add-btn" id="donate-link" href="#" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;">Donate →</a>
+        <p class="section-sub">One-time migration from Google, Apple, Outlook, or any iCal link — copies events in as native, fully-editable events on this calendar. Unlike a feed above, it does not stay live-synced.</p>
+
+        <div class="field">
+          <label for="import-url">iCal URL</label>
+          <input id="import-url" type="text" placeholder="https://calendar.google.com/calendar/ical/…" />
+        </div>
+
+        <div class="field">
+          <label for="import-person">Assign unmatched events to</label>
+          <select id="import-person"></select>
+        </div>
+
+        <div class="field">
+          <label for="import-range">Date range</label>
+          <select id="import-range">
+            <option value="future" selected>All future events</option>
+            <option value="year">This year forward</option>
+            <option value="all">All events</option>
+            <option value="custom">Custom range…</option>
+          </select>
+        </div>
+
+        <div class="row-2" id="import-custom-range" style="display:none;">
+          <div class="field">
+            <label for="import-start">From</label>
+            <input id="import-start" type="date" />
+          </div>
+          <div class="field">
+            <label for="import-end">To</label>
+            <input id="import-end" type="date" />
+          </div>
+        </div>
+
+        <div class="section-actions">
+          <button class="add-btn" id="import-preview-btn" type="button">Preview</button>
+          <button class="btn btn-sm" id="import-run-btn" type="button" style="display:none;">Import now</button>
+        </div>
+        <p class="hint" id="import-result" style="display:none;"></p>
+        </div>
+      </details>
+
+      <!-- Calendar settings -->
+      <details class="card" data-sec="setup">
+        <summary class="card-head"><h2>Setup</h2></summary>
+        <div class="card-body">
+        <p class="section-sub">Name, weather, layout, theme, and visibility.</p>
+
+        <div class="field">
+          <label>Calendar name</label>
+          <input type="text" id="set-name" maxlength="60" />
+        </div>
+
+        <div class="field">
+          <label>ZIP code <span class="opt-note">· for weather</span></label>
+          <div class="row-2">
+            <input type="text" id="set-zip" placeholder="90210" maxlength="5" inputmode="numeric" />
+            <select id="set-units">
+              <option value="fahrenheit">°F</option>
+              <option value="celsius">°C</option>
+            </select>
+          </div>
+          <div class="hint">Leave blank to hide weather. Looked up via the free, keyless Zippopotam.us + Open-Meteo APIs.</div>
+        </div>
+
+        <div class="field row-2">
+          <div>
+            <label>Time zone</label>
+            <select id="set-tz"></select>
+          </div>
+          <div>
+            <label>Week starts on</label>
+            <select id="set-firstday">
+              <option value="0">Sunday</option>
+              <option value="1">Monday</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Weeks to show</label>
+          <select id="set-weeks">
+            <option value="2">2 weeks</option>
+            <option value="3">3 weeks</option>
+            <option value="4">4 weeks</option>
+            <option value="5">5 weeks</option>
+            <option value="6">6 weeks</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Theme</label>
+          <div class="theme-grid" id="theme-grid"></div>
+        </div>
+
+        <!-- Wording matters here. "Anyone with the link" (the old label) reads
+             like the Share link below it — an unguessable URL showing only the
+             events you tagged. This toggle is not that: it removes the password
+             from the calendar itself, so every event, time and location is
+             readable by anyone who reaches this address. -->
+        <div class="field">
+          <div class="toggle-field">
+            <div>
+              <div class="toggle-label">Turn off the password (public calendar)</div>
+              <div class="toggle-desc">
+                Lets <strong>anyone who can reach this address</strong> read the whole
+                calendar — every event, time, person and location — with no password.
+                This is not the Share link: it has no secret URL and no keyword filter.
+                Off = the household password is required to view.
+              </div>
+              <div class="toggle-warn" id="public-warn">
+                This calendar is readable by anyone who can reach it. If it is exposed to
+                the internet, that means anyone at all. To share only some events instead,
+                turn this off and use the <strong>Share link</strong> section below.
+              </div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="set-public" />
+              <span class="track"></span>
+            </label>
+          </div>
+        </div>
         </div>
       </details>
     </div>
@@ -1601,10 +1601,10 @@
       try { open = JSON.parse(localStorage.getItem(OPEN_KEY) || 'null'); } catch { open = null; }
       const cards = Array.from(document.querySelectorAll('details.card[data-sec]'));
       cards.forEach((c) => {
-        // First visit: open Calendar only. It's the section people actually come
-        // for, and one open section shows the pattern without restoring the wall
-        // of text this replaced.
-        c.open = Array.isArray(open) ? open.includes(c.dataset.sec) : c.dataset.sec === 'calendar';
+        // On a first visit every section starts closed. The old default opened
+        // Calendar, but that section is now Setup and sits at the bottom, so
+        // auto-expanding it would scroll past everything else.
+        c.open = Array.isArray(open) ? open.includes(c.dataset.sec) : false;
       });
       cards.forEach((c) => c.addEventListener('toggle', () => {
         const nowOpen = cards.filter((x) => x.open).map((x) => x.dataset.sec);
