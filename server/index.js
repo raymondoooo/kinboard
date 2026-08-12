@@ -17,6 +17,7 @@ const meals = require('./routes/meals');
 const todos = require('./routes/todos');
 const { geocodeZip } = require('./geocode');
 const { THEMES, HEX_RE, cleanEmoji, isValidDate, isValidTime } = require('./validate');
+const { dbError } = require('./respond');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -1066,8 +1067,7 @@ app.patch('/api/events/:id', auth.requireAuth, async (req, res) => {
 
   const { data, error } = await db.from('events').update(row).eq('id', req.params.id).select().single();
 
-  if (error) return res.status(500).json({ error: error.message });
-  if (!data) return res.status(404).json({ error: 'Event not found' });
+  if (error) return dbError(res, error, 'Event not found');
 
   res.json({ ok: true, event: toClientEvent(data) });
 });
@@ -1146,8 +1146,7 @@ app.patch('/api/members/:id', auth.requireAuth, async (req, res) => {
   if (Object.keys(update).length === 0) return res.status(400).json({ error: 'no fields to update' });
 
   const { data, error } = await db.from('members').update(update).eq('id', req.params.id).select().single();
-  if (error) return res.status(500).json({ error: error.message });
-  if (!data) return res.status(404).json({ error: 'Member not found' });
+  if (error) return dbError(res, error, 'Member not found');
   res.json({ ok: true, member: data });
 });
 
@@ -1250,8 +1249,7 @@ app.patch('/api/feeds/:id', auth.requireAuth, async (req, res) => {
   if (Object.keys(update).length === 0) return res.status(400).json({ error: 'no fields to update' });
 
   const { data, error } = await db.from('feeds').update(update).eq('id', req.params.id).select().single();
-  if (error) return res.status(500).json({ error: error.message });
-  if (!data) return res.status(404).json({ error: 'Feed not found' });
+  if (error) return dbError(res, error, 'Feed not found');
   res.json({ ok: true, feed: data });
 });
 
@@ -1703,13 +1701,25 @@ app.use(express.static(path.join(__dirname, '..', 'public'), { index: false }));
 // must keep all four arguments — Express identifies error handlers by arity.
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
-  console.error(`[error] ${req.method} ${req.path}:`, err && err.stack || err);
-  if (res.headersSent) return;
   const status = err && (err.status || err.statusCode);
-  if (status === 400 && err.type === 'entity.parse.failed') {
-    return res.status(400).json({ error: 'Malformed JSON body' });
+
+  // A rejected body is the client's mistake, not a fault here. Logging those at
+  // [error] with a stack trace meant anything scanning the box — or one phone
+  // on a flaky connection — buried the genuine failures in noise, which is how
+  // a real error goes unnoticed. Client errors get one quiet line; only actual
+  // server faults get the stack.
+  if (status && status >= 400 && status < 500) {
+    console.warn(`[bad-request] ${req.method} ${req.path}: ${err.message}`);
+    if (res.headersSent) return;
+    if (status === 400 && err.type === 'entity.parse.failed') {
+      return res.status(400).json({ error: 'Malformed JSON body' });
+    }
+    if (status === 413) return res.status(413).json({ error: 'Request body too large' });
+    return res.status(status).json({ error: 'Bad request' });
   }
-  if (status === 413) return res.status(413).json({ error: 'Request body too large' });
+
+  console.error(`[error] ${req.method} ${req.path}:`, (err && err.stack) || err);
+  if (res.headersSent) return;
   res.status(500).json({ error: 'Something went wrong. Check the server logs.' });
 });
 

@@ -1,5 +1,6 @@
 const db = require('../db');
 const { isValidDate } = require('../validate');
+const { dbError } = require('../respond');
 
 const MEAL_TYPES = new Set(['breakfast', 'lunch', 'dinner', 'snack']);
 
@@ -68,8 +69,7 @@ async function update(req, res) {
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
-  if (!data) return res.status(404).json({ error: 'Meal not found' });
+  if (error) return dbError(res, error, 'Meal not found');
   res.json({ ok: true, meal: data });
 }
 

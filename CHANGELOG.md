@@ -6,6 +6,19 @@ means the shape of things can still change between minor releases.
 ## [Unreleased]
 
 ### Fixed
+- **Editing something another device just deleted returned 500.** The database
+  shim reports "no rows" as an error, and every update handler mapped that to a
+  server fault — so a routine race on a shared family calendar (delete on the
+  phone, edit on the tablet) looked like the app had broken. Those now answer
+  404 with a clear message; genuine database failures still answer 500.
+- **Malformed request bodies were logged as server errors.** Anything scanning
+  the box filled the log with `[error]` lines and stack traces, which is how a
+  real fault goes unnoticed. Client mistakes now get one quiet line.
+- **One field on the public share page was interpolated into HTML unescaped.**
+  Not reachable today, but that page is unauthenticated and renders event
+  titles that can come straight from a third-party calendar feed, so it should
+  not have been one new write path away from an injection. Every interpolation
+  on every page is now escaped, and CI fails if that stops being true.
 - **One malformed event in a subscribed calendar killed the whole calendar.**
   A feed containing an unparseable date (a real school-district feed emitted
   `DTSTART:TBD`) threw during expansion, and because that happens inside an

@@ -301,7 +301,18 @@ class QueryBuilder {
     const decoded = rows.map((r) => decodeRow(this.table, r));
     if (this.wantSingle) {
       if (decoded.length !== 1) {
-        return { data: null, error: { message: decoded.length === 0 ? 'No rows found' : 'Multiple rows found' } };
+        // `notFound` lets a caller tell "that row is gone" apart from "the
+        // database failed". Without it, updating a deleted row answered 500 —
+        // which is what a family got when one phone deleted an event and
+        // another edited it a moment later, a routine race on a shared
+        // calendar. (`code` mirrors PostgREST, matching the supabase-js shape
+        // the rest of this shim imitates.)
+        return {
+          data: null,
+          error: decoded.length === 0
+            ? { message: 'No rows found', code: 'PGRST116', notFound: true }
+            : { message: 'Multiple rows found' },
+        };
       }
       return { data: decoded[0], error: null };
     }

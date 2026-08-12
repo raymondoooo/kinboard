@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const db = require('../db');
 const { isValidDate } = require('../validate');
+const { dbError } = require('../respond');
 
 const RECUR_PATTERNS = new Set(['daily', 'weekly', 'monthly']);
 
@@ -143,8 +144,7 @@ async function update(req, res) {
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
-  if (!data) return res.status(404).json({ error: 'Todo not found' });
+  if (error) return dbError(res, error, 'To-do not found');
   res.json({ ok: true, todo: data });
 }
 
