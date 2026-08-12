@@ -1639,7 +1639,7 @@ app.post('/api/push/test', auth.requireAuth, async (req, res) => {
   if (!subs.length) return res.status(404).json({ error: 'No registered devices to notify' });
 
   const sent = await push.sendToMany(subs, {
-    title: 'Kinboard test notification',
+    title: 'Test notification',
     body: 'Notifications are working. 🎉',
     url: '/',
     tag: 'kinboard-test',
