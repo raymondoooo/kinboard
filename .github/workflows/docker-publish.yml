@@ -143,6 +143,56 @@ jobs:
           [ "$seen429" = "1" ] || { echo "FAIL: rate limit bypassed by spoofed X-Forwarded-For"; exit 1; }
           echo "rate limit holds against spoofing"
 
+      - name: Editing a deleted row must be 404, not 500
+        run: |
+          set -e
+          B=http://localhost:3000
+          # The API returns the event as `uid`, not `id` — toClientEvent renames it.
+          id=$(curl -fsS -b /tmp/j -X POST "$B/api/events" -H 'Content-Type: application/json' \
+            -d '{"title":"Doomed","date":"2030-06-01","allDay":true}' \
+            | grep -o '"uid":"[^"]*"' | head -1 | cut -d'"' -f4)
+          [ -n "$id" ] || { echo "FAIL: could not read the new event's id"; exit 1; }
+          curl -fsS -b /tmp/j -X DELETE "$B/api/events/$id" >/dev/null
+          # One device deleting while another edits is routine on a shared
+          # family calendar. It used to answer 500 "No rows found", which reads
+          # as "the server is broken" and hides real faults in the logs.
+          code=$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/j -X PATCH "$B/api/events/$id" \
+            -H 'Content-Type: application/json' -d '{"title":"Edited after delete"}')
+          [ "$code" = "404" ] || { echo "FAIL: editing a deleted event returned $code, expected 404"; exit 1; }
+
+          # A genuinely malformed body is the client's fault: 400, not 500.
+          code=$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/j -X POST "$B/api/events" \
+            -H 'Content-Type: application/json' -d '{"title":')
+          [ "$code" = "400" ] || { echo "FAIL: malformed JSON returned $code, expected 400"; exit 1; }
+          echo "missing rows and bad bodies answer 4xx"
+
+      - name: No unescaped interpolation into innerHTML
+        run: |
+          # The share page is public and renders titles that can come straight
+          # from a third-party iCal feed. One field there was interpolated raw.
+          python3 - <<'EOF'
+          import re, glob, sys
+          SAFE = re.compile(r'^\s*(esc|escapeHtml|encodeURIComponent|Number|parseInt|parseFloat)\s*\(')
+          bad = []
+          for f in sorted(glob.glob('public/*.html')):
+              src = open(f).read()
+              for m in re.finditer(r'innerHTML\s*(?:\+)?=\s*`', src):
+                  i = m.end(); j = i
+                  while j < len(src):
+                      if src[j] == '`' and src[j-1] != '\\': break
+                      j += 1
+                  for e in re.finditer(r'\$\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}', src[i:j]):
+                      x = e.group(1).strip()
+                      if SAFE.match(x): continue
+                      if re.fullmatch(r"[^`]*\?\s*'[^']*'\s*:\s*'[^']*'", x): continue
+                      bad.append(f"{f}: ${{{x[:70]}}}")
+          if bad:
+              print("FAIL: unescaped interpolation into innerHTML:")
+              [print("  " + b) for b in bad]
+              sys.exit(1)
+          print("all innerHTML interpolations are escaped")
+          EOF
+
       - name: App must run as a non-root user
         run: |
           # Read the numeric uid of PID 1 from /proc rather than parsing `ps`.

@@ -100,7 +100,12 @@
         row.style.borderLeftColor = ev.color || 'var(--border)';
         const time = ev.timeLabel || 'All day';
         row.innerHTML = `
-          <span class="time">${time}</span>
+          <!-- Escaped like every other field here. timeLabel is server-built
+               from a validated time today, so this isn't currently reachable —
+               but this is the one public, unauthenticated page in the product,
+               and it renders titles that can originate from a third-party iCal
+               feed. It shouldn't be one new write path away from an injection. -->
+          <span class="time">${esc(time)}</span>
           <span>
             <span class="title">${esc(ev.title)}</span>
             ${(ev.people && ev.people.length) ? `<span class="who"> · ${esc(ev.people.join(', '))}</span>` : ''}
