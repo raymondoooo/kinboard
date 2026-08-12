@@ -19,6 +19,14 @@ const { geocodeZip } = require('./geocode');
 const { THEMES, HEX_RE, cleanEmoji, isValidDate, isValidTime } = require('./validate');
 const { dbError } = require('./respond');
 
+// What version is actually running. CI stamps KINBOARD_VERSION from the git tag
+// at build time; anything built by hand falls back to package.json and is marked
+// `-dev`, so a local build can't be mistaken for a release. Worth surfacing:
+// "which version is this?" was unanswerable from inside the app, and `latest` in
+// a compose file tells you nothing about what was actually pulled.
+const VERSION = (process.env.KINBOARD_VERSION || '').trim()
+  || `${require('../package.json').version}-dev`;
+
 const app = express();
 const PORT = process.env.PORT || 3200;
 
@@ -879,6 +887,7 @@ app.get('/api/config', requireViewAccess, async (req, res) => {
   }
 
   res.json({
+    version: VERSION,
     name: settings.name,
     weeksToShow: settings.weeks_to_show ?? 4,
     firstDayOfWeek: settings.first_day_of_week ?? 0,

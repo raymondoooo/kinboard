@@ -529,11 +529,26 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
 
+      - name: package.json version must match the tag
+        run: |
+          # The version shown in Settings falls back to package.json, so a
+          # forgotten bump would have the app report the wrong number. It sat at
+          # 0.1.0 through three releases before anyone noticed.
+          pkg=$(node -p "require('./package.json').version")
+          tag="${{ steps.meta.outputs.version }}"
+          [ "$pkg" = "$tag" ] || {
+            echo "FAIL: package.json says $pkg, the tag says $tag — bump package.json"; exit 1; }
+          echo "package.json and tag agree on $tag"
+
       - uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
+          # Stamps the running app with the released version, so Settings shows
+          # what was actually pulled rather than what a compose file requested.
+          build-args: |
+            KINBOARD_VERSION=${{ steps.meta.outputs.version }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: true
