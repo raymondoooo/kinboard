@@ -196,6 +196,83 @@ jobs:
           print("all innerHTML interpolations are escaped")
           EOF
 
+      - name: Checking a chore off twice must pay once
+        run: |
+          set -e
+          B=http://localhost:3000
+          curl -fsS -b /tmp/j -X PATCH "$B/api/settings" -H 'Content-Type: application/json' \
+            -d '{"point_value_cents":25}' >/dev/null
+          curl -fsS -b /tmp/j -X POST "$B/api/members" -H 'Content-Type: application/json' \
+            -d '{"display_name":"Kid"}' >/dev/null
+
+          # A one-off chore, tapped twice. This needed no concurrency to pay
+          # double: nothing checked the row was actually changing state.
+          one=$(curl -fsS -b /tmp/j -X POST "$B/api/todos" -H 'Content-Type: application/json' \
+            -d '{"title":"CI once","people":["Kid"],"points":10}' \
+            | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+          curl -fsS -b /tmp/j -X PATCH "$B/api/todos/$one" -H 'Content-Type: application/json' -d '{"done":true}' >/dev/null
+          curl -fsS -b /tmp/j -X PATCH "$B/api/todos/$one" -H 'Content-Type: application/json' -d '{"done":true}' >/dev/null
+
+          # A weekly chore, five devices at once. This paid five times AND
+          # advanced the chore five weeks, so it disappeared for a month.
+          rec=$(curl -fsS -b /tmp/j -X POST "$B/api/todos" -H 'Content-Type: application/json' \
+            -d '{"title":"CI weekly","people":["Kid"],"points":8,"recurring":"weekly","dueDate":"2030-08-14"}' \
+            | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+          for i in 1 2 3 4 5; do
+            curl -s -b /tmp/j -X PATCH "$B/api/todos/$rec" -H 'Content-Type: application/json' -d '{"done":true}' -o /dev/null &
+          done
+          wait
+          sleep 1
+
+          curl -fsS -b /tmp/j "$B/api/chores/completions" > /tmp/comp.json
+          once=$(grep -o '"title":"CI once"' /tmp/comp.json | wc -l)
+          week=$(grep -o '"title":"CI weekly"' /tmp/comp.json | wc -l)
+          [ "$once" = "1" ] || { echo "FAIL: double-tapped chore recorded $once completions, expected 1"; exit 1; }
+          [ "$week" = "1" ] || { echo "FAIL: 5 simultaneous check-offs recorded $week completions, expected 1"; exit 1; }
+
+          curl -fsS -b /tmp/j "$B/api/todos" | grep -q '"due_date":"2030-08-21"' \
+            || { echo "FAIL: weekly chore did not advance exactly one week"; exit 1; }
+          echo "chores pay once per completion"
+
+      - name: Reminders must fire once across a DST change
+        run: |
+          # Reminder windows used to be wall-clock arithmetic, which assumes
+          # every hour is 60 minutes. On the night the clocks go back, 01:30
+          # local happens twice, so a reminder due then went out twice — an
+          # hour apart, the first an hour early.
+          docker cp kinboard-ci:/app/server/notify.js /tmp/notify.js
+          node -e "
+            const fs=require('fs');
+            const src=fs.readFileSync('/tmp/notify.js','utf8');
+            const grab=(re)=>{const m=src.match(re); if(!m) throw new Error('missing '+re); return m[0];};
+            eval([grab(/const dtfCache[\s\S]*?\n}/),
+                  grab(/function offsetFormatter[\s\S]*?\n  return f;\n}/),
+                  grab(/function tzOffsetMinutes[\s\S]*?\n}/),
+                  grab(/function localToInstant[\s\S]*?\n}/)].join('\n'));
+            const TICK=5, LEAD=60, TZ='America/New_York';
+            function fires(startUTC,hours,date,mins){
+              let n=0,t=startUTC;
+              for(let i=0;i<hours*60/TICK;i++){
+                const d=(localToInstant(date,mins,TZ)-t)/60000;
+                if(d>=LEAD&&d<LEAD+TICK)n++;
+                t+=TICK*60000;
+              }
+              return n;
+            }
+            const cases=[
+              ['fall back 02:30',    Date.UTC(2026,10,1,3,0), 8,'2026-11-01',150],
+              ['spring forward 04:00',Date.UTC(2026,2,8,5,0),  8,'2026-03-08',240],
+              ['ordinary day 09:00', Date.UTC(2026,6,15,6,0),  8,'2026-07-15',540],
+            ];
+            let bad=0;
+            for(const [name,s,h,d,m] of cases){
+              const n=fires(s,h,d,m);
+              if(n!==1){ console.log('FAIL: '+name+' fired '+n+' times, expected 1'); bad++; }
+              else console.log('  ok: '+name+' fired once');
+            }
+            process.exit(bad?1:0);
+          "
+
       - name: App must run as a non-root user
         run: |
           # Read the numeric uid of PID 1 from /proc rather than parsing `ps`.

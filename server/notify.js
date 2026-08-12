@@ -37,10 +37,11 @@ function allSubscriptions() {
 
 // ── Household-local time helpers ────────────────────────────────────────────
 // Events store FLOATING local time (a wall-clock date + time with no zone), so
-// every comparison has to happen in the household's own timezone rather than the
-// server's. Both sides are reduced to "absolute minutes" — a day number times
-// 1440 plus minutes-past-midnight — which makes windows that straddle midnight
-// fall out for free.
+// everything here has to be interpreted in the household's own timezone rather
+// than the server's. "How long until this event" is then answered in *real*
+// minutes, by resolving the wall-clock time to an instant (localToInstant) —
+// not by subtracting wall-clock minutes, which assumes every hour is 60 minutes
+// long and so fired twice on the night the clocks go back.
 
 function localNow(tz) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -54,19 +55,67 @@ function localNow(tz) {
   return { date: `${g('year')}-${g('month')}-${g('day')}`, hour, minute: +g('minute') };
 }
 
-function dayNumber(ymd) {
-  const [y, m, d] = String(ymd).slice(0, 10).split('-').map(Number);
-  return Math.floor(Date.UTC(y, m - 1, d) / 86400000);
-}
-
-function absMinutes(ymd, minutesPastMidnight) {
-  return dayNumber(ymd) * 1440 + minutesPastMidnight;
-}
 
 // "HH:MM[:SS]" → minutes past midnight.
 function hmToMinutes(hms) {
   const [h, m] = String(hms).split(':').map(Number);
   return h * 60 + (m || 0);
+}
+
+// Constructing an Intl.DateTimeFormat is expensive, and the reminder loop asks
+// for the offset once per device per occurrence (twice, for the two-pass
+// resolution below). A household with five phones and fifty occurrences would
+// build thousands of formatters every five minutes, forever, on hardware that is
+// often a Raspberry Pi. There is one timezone in a household — cache it.
+const dtfCache = new Map();
+function offsetFormatter(tz) {
+  let f = dtfCache.get(tz);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz, hour12: false,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+    dtfCache.set(tz, f);
+  }
+  return f;
+}
+
+// Minutes `tz` is ahead of UTC at a given instant (negative = behind).
+function tzOffsetMinutes(tz, date) {
+  const dtf = offsetFormatter(tz);
+  const p = {};
+  for (const { type, value } of dtf.formatToParts(date)) p[type] = value;
+  let hour = +p.hour;
+  if (hour === 24) hour = 0;
+  const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, hour, +p.minute, +p.second);
+  return Math.round((asUTC - date.getTime()) / 60000);
+}
+
+// A floating wall-clock time ("2026-11-01" + 02:30) in `tz` → the real instant
+// it happens at.
+//
+// Reminders used to compare wall-clock minutes, which quietly assumes every hour
+// is 60 minutes long. On the night the clocks go back, 01:30 local happens
+// twice, so a reminder due then went out twice — an hour apart, the first an
+// hour early. Comparing real instants makes that impossible by construction: an
+// instant crosses the [lead, lead + tick) window exactly once, whatever the
+// local clock is doing.
+//
+// Two passes, because the first correction can itself cross a transition. An
+// ambiguous time (the repeated hour) resolves to one of its two instants
+// deterministically, a nonexistent one (the skipped hour) to the shifted
+// instant. Both are fine — what matters is that the answer is one real moment.
+function localToInstant(ymd, minutesPastMidnight, tz) {
+  const [y, m, d] = String(ymd).slice(0, 10).split('-').map(Number);
+  const hh = Math.floor(minutesPastMidnight / 60);
+  const mm = minutesPastMidnight % 60;
+  const naive = Date.UTC(y, m - 1, d, hh, mm);
+  let guess = naive;
+  for (let i = 0; i < 2; i++) {
+    guess = naive - tzOffsetMinutes(tz, new Date(guess)) * 60000;
+  }
+  return guess;
 }
 
 // ── Occurrence lookup ───────────────────────────────────────────────────────
@@ -219,7 +268,7 @@ async function checkDueReminders() {
   const settings = getSettings();
   const tz = settings.time_zone || 'America/New_York';
   const now = localNow(tz);
-  const nowAbs = absMinutes(now.date, now.hour * 60 + now.minute);
+  const nowMs = Date.now();
 
   const subs = allSubscriptions().filter((s) => s.reminders_enabled);
   if (!subs.length) return { sent: 0 };
@@ -235,9 +284,10 @@ async function checkDueReminders() {
     const lead = Number.isFinite(+sub.reminder_minutes) ? +sub.reminder_minutes : 60;
     for (const occ of occs) {
       if (!deviceCaresAbout(sub, occ.people)) continue;
-      const occAbs = absMinutes(occ.date, hmToMinutes(String(occ.start).slice(11, 16)));
-      const delta = occAbs - nowAbs;
-      // The half-open window is what makes this fire exactly once.
+      // Real minutes until the event, not wall-clock minutes — see
+      // localToInstant. The half-open window is what makes this fire once.
+      const occMs = localToInstant(occ.date, hmToMinutes(String(occ.start).slice(11, 16)), tz);
+      const delta = (occMs - nowMs) / 60000;
       if (delta < lead || delta >= lead + TICK_MINUTES) continue;
 
       const whenText = lead >= 60
@@ -300,7 +350,21 @@ async function tick() {
   try {
     const settings = getSettings();
     const now = localNow(settings.time_zone || 'America/New_York');
-    if (now.hour === DIGEST_HOUR && now.minute < TICK_MINUTES) await runDigest();
+
+    // Send today's digest once. Keyed on the household-local date rather than
+    // "we are inside the first five minutes of DIGEST_HOUR", which sent two
+    // digests on the night the clocks go back (that hour happens twice) and
+    // none at all if the container was restarting during those five minutes.
+    // The catch-up window is bounded so starting a container in the evening
+    // doesn't fire a digest for a day that's nearly over.
+    const withinCatchUp = now.hour >= DIGEST_HOUR && now.hour < DIGEST_HOUR + 3;
+    if (withinCatchUp && settings.last_digest_date !== now.date) {
+      // Claim the day before sending. If the send throws, the digest is skipped
+      // rather than retried every five minutes for the rest of the window.
+      db.raw.prepare('UPDATE settings SET last_digest_date = ? WHERE id = 1').run(now.date);
+      await runDigest();
+    }
+
     await checkDueReminders();
   } catch (err) {
     console.error('[notify] tick failed:', err.message);
