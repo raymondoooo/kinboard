@@ -5,9 +5,20 @@ means the shape of things can still change between minor releases.
 
 ## [Unreleased]
 
-### Added
-- **`docker-compose.prod.yml`** — a compose file meant for a server: a pinned
-  published image, its own project name, and no source checkout required.
+### Changed
+- **BREAKING: Kinboard now listens on port 3200 inside the container, not 3000.**
+  The published port and the internal port are the same number, the way
+  established self-hosted products do it (Plex 32400, Home Assistant 8123,
+  Jellyfin 8096) — so the README, the healthcheck, a reverse-proxy config and
+  `docker ps` all say one number instead of two. **If you run
+  `-p 3200:3000`, change it to `-p 3200:3200`**, or the container will start
+  and nothing will answer. A reverse proxy pointing at the *host* port is
+  unaffected; one pointing at `kinboard:3000` on a Docker network needs
+  updating to `kinboard:3200`.
+- `docker-compose.yml` is now the file to copy to a server: a pinned published
+  image, no build step, no `.env` required. Building from a checkout moved to
+  `docker-compose.dev.yml`.
+
 
 ### Fixed
 - **Upgrading mid-morning sent a second daily digest.** The new

@@ -42,7 +42,7 @@ Open the JSON. It's the last chance to see the data in a form you can read.
 ## 2. Stand up a Kinboard instance and complete setup
 
 ```bash
-docker run -d --name kinboard-<slug> -p 3200:3000 \
+docker run -d --name kinboard-<slug> -p 3200:3200 \
   -v kinboard-<slug>-data:/app/data raymondoooo/kinboard:latest
 ```
 

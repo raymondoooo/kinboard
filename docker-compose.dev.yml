@@ -13,7 +13,7 @@ services:
     restart: unless-stopped
     env_file: .env
     ports:
-      - "3201:3000"
+      - "3201:3200"
     volumes:
       - ./data:/app/data
       # public/ is bind-mounted so front-end edits are live on hard-refresh.

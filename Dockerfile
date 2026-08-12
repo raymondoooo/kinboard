@@ -44,12 +44,12 @@ RUN chmod +x /docker-entrypoint.sh
 # shadow whatever this image's own copy of the directory was chown'd to.
 VOLUME /app/data
 
-EXPOSE 3000
+EXPOSE 3200
 
 # Reports unhealthy if the process is up but can't answer — e.g. the database
 # file became unreadable. Uses Node's built-in fetch so the image needs no curl.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3200)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 # Static fallbacks; CI overrides these with richer values from
 # docker/metadata-action (revision, created, version).

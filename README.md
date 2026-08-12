@@ -17,7 +17,7 @@ That's the whole install — no source checkout, no `.env`, no build step. Or wi
 compose:
 
 ```sh
-docker run -d --name kinboard -p 3200:3000 \
+docker run -d --name kinboard -p 3200:3200 \
   -v kinboard-data:/app/data --restart unless-stopped \
   raymondoooo/kinboard:0.2.1
 ```
@@ -49,7 +49,7 @@ set — they're for hardening and integration.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `PORT` | `3000` | Port inside the container. The compose file maps it to `3200` on the host. |
+| `PORT` | `3200` | The port Kinboard listens on, inside and out. Change the host side of the compose mapping instead if 3200 is taken. |
 | `TRUST_PROXY` | *(off)* | **Set this if Kinboard sits behind a reverse proxy.** See below. |
 | `SECURE_COOKIES` | *(off)* | Set to `true` if you serve over HTTPS, to mark the session cookie HTTPS-only. Leave off for plain-HTTP LAN use, or you won't be able to log in. |
 | `DIGEST_HOUR` | `7` | Hour (0–23, your household's timezone) to send the daily digest. |
