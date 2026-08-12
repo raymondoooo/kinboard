@@ -8,10 +8,12 @@
 
 services:
   kinboard:
-    # Pinned on purpose: `latest` moves under you on the next pull, and this is
-    # the calendar your household depends on. Bump it deliberately, after
-    # reading the changelog. Also on ghcr.io/raymondoooo/kinboard.
-    image: raymondoooo/kinboard:0.2.4
+    image: raymondoooo/kinboard:latest
+    # Re-checks the registry on every `up -d`, so you stay current. Without it
+    # Docker reuses whatever copy of the tag is already on disk and never asks.
+    # To stay on a fixed version instead, pin the image above
+    # (e.g. raymondoooo/kinboard:0.2.4) and drop this line.
+    pull_policy: always
     restart: unless-stopped
 
     ports:

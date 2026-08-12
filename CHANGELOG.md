@@ -6,6 +6,10 @@ means the shape of things can still change between minor releases.
 ## [0.2.4] — 2026-08-12
 
 ### Added
+- **The shipped compose file tracks `latest` and pulls it.** `docker compose up
+  -d` re-checks the registry and keeps you current, which is what people expect
+  a `latest` tag to do. Pinning is a one-line change for anyone who'd rather
+  stay put.
 - **The running version is shown at the bottom of Settings.** There was no way
   to tell from inside the app which build you were on — and `latest` in a
   compose file tells you nothing, because Docker reuses a cached tag without

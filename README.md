@@ -19,8 +19,13 @@ compose:
 ```sh
 docker run -d --name kinboard -p 3200:3200 \
   -v kinboard-data:/app/data --restart unless-stopped \
-  raymondoooo/kinboard:0.2.4
+  raymondoooo/kinboard:latest
 ```
+
+The compose file tracks `latest` and re-checks the registry each time you bring it
+up, so `docker compose up -d` keeps you current. Prefer to stay put? Pin the image
+(`raymondoooo/kinboard:0.2.4`) and remove `pull_policy: always`. Settings shows the
+version you're actually running, either way.
 
 Also on GHCR as `ghcr.io/raymondoooo/kinboard`. To build from a checkout instead, see
 [`docker-compose.dev.yml`](docker-compose.dev.yml).
