@@ -185,7 +185,10 @@ jobs:
                       x = e.group(1).strip()
                       if SAFE.match(x): continue
                       if re.fullmatch(r"[^`]*\?\s*'[^']*'\s*:\s*'[^']*'", x): continue
-                      bad.append(f"{f}: ${{{x[:70]}}}")
+                      # Report the bare expression. Writing it wrapped in
+                      # dollar-brace-brace made GitHub try to evaluate it as one
+                      # of its own workflow expressions and reject the file.
+                      bad.append(f"{f}: {x[:70]}")
           if bad:
               print("FAIL: unescaped interpolation into innerHTML:")
               [print("  " + b) for b in bad]
