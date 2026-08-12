@@ -1,13 +1,34 @@
-name: kinboard
+# Kinboard — a private family calendar you host yourself.
+#
+#   1. Save this file somewhere.
+#   2. docker compose up -d
+#   3. Open http://localhost:3200 and pick a household password.
+#
+# That's the whole install. No source checkout, no .env, no build step.
 
 services:
   kinboard:
-    build: .
+    # Pinned on purpose: `latest` moves under you on the next pull, and this is
+    # the calendar your household depends on. Bump it deliberately, after
+    # reading the changelog. Also on ghcr.io/raymondoooo/kinboard.
+    image: raymondoooo/kinboard:0.2.1
     restart: unless-stopped
-    env_file: .env
+
     ports:
+      # host:container — change the left side if 3200 is already taken.
       - "3200:3000"
+
     volumes:
-      # Everything that matters — the SQLite DB, its WAL files, nightly
-      # backups — lives here. Back up this folder; that's the whole database.
+      # The database, its WAL sidecars and the nightly backups all live here.
+      # This directory IS your calendar: back it up and nothing else.
       - ./data:/app/data
+
+    # Uncomment if you put Kinboard behind an HTTPS reverse proxy (nginx, Caddy,
+    # Nginx Proxy Manager, Cloudflare Tunnel).
+    # environment:
+    #   # Lets the login rate limiter see real client addresses, not the proxy's.
+    #   TRUST_PROXY: "1"
+    #   # Marks the session cookie HTTPS-only. LEAVE THIS OFF for plain-HTTP LAN
+    #   # access, or the browser will accept the cookie at login and then refuse
+    #   # to send it back, and you'll bounce to the login form forever.
+    #   SECURE_COOKIES: "true"

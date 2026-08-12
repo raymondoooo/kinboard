@@ -7,30 +7,23 @@ password, your data stays on your own disk.
 
 ## Quick start
 
+Save [`docker-compose.yml`](docker-compose.yml) somewhere and run:
+
+```sh
+docker compose up -d
+```
+
+That's the whole install — no source checkout, no `.env`, no build step. Or without
+compose:
+
 ```sh
 docker run -d --name kinboard -p 3200:3000 \
   -v kinboard-data:/app/data --restart unless-stopped \
-  raymondoooo/kinboard:latest
+  raymondoooo/kinboard:0.2.1
 ```
 
-Also on GHCR as `ghcr.io/raymondoooo/kinboard`. Or from source:
-
-```sh
-cp .env.example .env
-docker compose up --build
-```
-
-**Running it on a server, with compose?** Use `docker-compose.prod.yml` rather than
-copying `docker-compose.yml` across. That one builds from this repo, so on a machine
-without the source it fails on `build: .`, then on a missing `.env` — and its project
-name collides with any other Kinboard on the same host, which means `docker compose up`
-from the wrong directory can re-point an existing instance at an empty data folder.
-`docker-compose.prod.yml` pulls a pinned published image and needs only itself plus
-an optional `.env`:
-
-```sh
-docker compose -f docker-compose.prod.yml up -d
-```
+Also on GHCR as `ghcr.io/raymondoooo/kinboard`. To build from a checkout instead, see
+[`docker-compose.dev.yml`](docker-compose.dev.yml).
 
 Open `http://localhost:3200` (or whatever host you're running this on) and follow the
 one-time setup screen: pick a calendar name and time zone, and choose the household

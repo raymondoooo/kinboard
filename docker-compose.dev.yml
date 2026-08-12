@@ -1,0 +1,21 @@
+# Building Kinboard from a source checkout, for development.
+#
+#   cp .env.example .env
+#   docker compose -f docker-compose.dev.yml up --build
+#
+# Everyone else wants docker-compose.yml, which pulls a published image.
+
+name: kinboard-dev
+
+services:
+  kinboard:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "3201:3000"
+    volumes:
+      - ./data:/app/data
+      # public/ is bind-mounted so front-end edits are live on hard-refresh.
+      # server/ changes still need a rebuild.
+      - ./public:/app/public
