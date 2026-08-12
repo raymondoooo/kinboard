@@ -11,7 +11,7 @@ services:
     # Pinned on purpose: `latest` moves under you on the next pull, and this is
     # the calendar your household depends on. Bump it deliberately, after
     # reading the changelog. Also on ghcr.io/raymondoooo/kinboard.
-    image: raymondoooo/kinboard:0.2.1
+    image: raymondoooo/kinboard:0.2.2
     restart: unless-stopped
 
     ports:

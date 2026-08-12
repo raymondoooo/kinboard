@@ -3,7 +3,19 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
-## [Unreleased]
+## [0.2.2] — 2026-08-12
+
+### Changed
+- **Settings sections reordered and renamed.** Setup leads and the donation card
+  trails, with the calendar-source sections grouped together near the bottom:
+  Calendar → **Setup**, Share & subscribe → **Sharing**, Calendars → **Subscribe
+  to calendar**, Import a calendar → **Ingest a calendar**. "Sharing" also
+  settles a collision the page had, where two adjacent sections both said
+  "subscribe" while meaning opposite directions — one pulls a school calendar
+  in, the other hands a read-only link out. A first visit opens Setup and leaves
+  the rest closed.
+
+## [0.2.1] — 2026-08-12
 
 ### Changed
 - **BREAKING: Kinboard now listens on port 3200 inside the container, not 3000.**
