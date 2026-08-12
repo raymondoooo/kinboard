@@ -209,5 +209,11 @@ console.log(
   '  - Logins. Everyone now uses the one household password.\n' +
   '  - Push notifications. Each device re-enables once from Settings.\n' +
   '  - Chore values. Price chores in the To-Do tab whenever you like.\n' +
-  '\nRestart the container so it picks up the imported data.\n'
+  // This used to say "restart the container so it picks up the imported data".
+  // It doesn't need one: SQLite is in WAL mode and the running server reads the
+  // same file this process just wrote. Verified by querying a live container
+  // before and after a restart and getting identical responses. Telling people
+  // to restart made them bounce a container for nothing — and, worse, doubt
+  // whether the import had worked when the calendar looked the same afterwards.
+  '\nOpen the calendar and look it over — the imported data is already live.\n'
 );
