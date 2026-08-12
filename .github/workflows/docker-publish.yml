@@ -345,6 +345,65 @@ jobs:
           echo "$out" | grep -q '^OK:' || { echo "FAIL: $out"; exit 1; }
           echo "$out"
 
+      - name: kinevents import must still work against the current schema
+        run: |
+          set -e
+          # The importer writes straight into the database, so it drifts out of
+          # step with schema changes silently — bumping SCHEMA_VERSION once left
+          # it verified only against the previous version. Runs on its own
+          # container and volume so it never touches the main test instance.
+          docker run -d --name kinboard-mig -p 3300:3000 -v kinboard-mig-data:/app/data kinboard:ci
+          # 2>/dev/null: the first probes land before the server binds, and a
+          # connection-reset message there reads like a failure in the log.
+          for i in $(seq 1 30); do curl -fsS -o /dev/null http://localhost:3300/setup 2>/dev/null && break; sleep 1; done
+          curl -fsS -X POST http://localhost:3300/api/setup -H 'Content-Type: application/json' \
+            -d '{"name":"tmp","timeZone":"UTC","password":"mig-password-123"}' >/dev/null
+
+          # Dates must sit inside the display window (-1 month to +1 year) or a
+          # recurring series expands to nothing and the test fails for the wrong
+          # reason. Compute them rather than hardcoding.
+          ONE=$(date -u -d '+40 days' +%Y-%m-%d)
+          WK=$(date -u -d '+10 days' +%Y-%m-%d)
+          WKEND=$(date -u -d '+120 days' +%Y-%m-%d)
+          SKIP=$(date -u -d '+24 days' +%Y-%m-%d)   # one occurrence of the weekly series
+          DUE=$(date -u -d '+5 days' +%Y-%m-%d)
+          cat > /tmp/export.json <<EOF
+          {"exportedAt":"2026-01-01T00:00:00Z","source":"kinevents",
+           "tenant":{"name":"Imported Family","time_zone":"America/New_York","weeks_to_show":5,
+             "first_day_of_week":1,"theme":"forest","zip":"08080","latitude":39.75,"longitude":-75.11,
+             "weather_units":"fahrenheit","holidays":["thanksgiving"],"is_public":false,
+             "share_token":"11111111-2222-3333-4444-555555555555","share_keywords":["game"]},
+           "members":[{"id":"aaaaaaaa-0000-0000-0000-000000000001","display_name":"Kid","color":"#e11d48","emoji":"K","member_type":"person","created_at":"2026-01-01T00:00:00Z"}],
+           "events":[
+             {"id":"bbbbbbbb-0000-0000-0000-000000000001","title":"One off","date":"$ONE","start_time":"09:45:00","end_time":"11:00:00","all_day":false,"people":["Kid"],"location":"Field 3","recurring":null,"ends_on":null,"exdates":[],"rrule":null,"share_override":null,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"},
+             {"id":"bbbbbbbb-0000-0000-0000-000000000002","title":"Weekly thing","date":"$WK","start_time":"17:30:00","end_time":"19:00:00","all_day":false,"people":["Kid"],"location":null,"recurring":"weekly","ends_on":"$WKEND","exdates":["$SKIP"],"rrule":null,"share_override":null,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}],
+           "feeds":[{"id":"cccccccc-0000-0000-0000-000000000001","name":"School","url":"https://example.invalid/s.ics","fixed_person":null,"color":"#16a34a","last_synced_at":null,"emoji":"S","display_name":"School","category":"family","never_share":true}],
+           "meals":[{"id":"dddddddd-0000-0000-0000-000000000001","date":"$WK","meal_type":"dinner","title":"Tacos","people":["Kid"],"notes":null,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}],
+           "todos":[{"id":"eeeeeeee-0000-0000-0000-000000000001","title":"Bins","done":false,"people":["Kid"],"due_date":"$DUE","recurring":"weekly","notes":null,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","completed_at":null}]}
+          EOF
+          docker cp /tmp/export.json kinboard-mig:/tmp/import.json
+
+          docker exec kinboard-mig node scripts/import-kinevents.js --file /tmp/import.json --data-dir /app/data --dry-run \
+            | grep -q 'Dry run complete' || { echo "FAIL: dry run did not complete"; exit 1; }
+          docker exec kinboard-mig node scripts/import-kinevents.js --file /tmp/import.json --data-dir /app/data > /tmp/imp.log 2>&1 \
+            || { echo "FAIL: import errored"; cat /tmp/imp.log; exit 1; }
+          grep -q 'events: 2' /tmp/imp.log || { echo "FAIL: expected 2 events imported"; cat /tmp/imp.log; exit 1; }
+
+          curl -fsS -c /tmp/mj -X POST http://localhost:3300/api/login -H 'Content-Type: application/json' \
+            -d '{"password":"mig-password-123"}' >/dev/null
+          curl -fsS -b /tmp/mj http://localhost:3300/api/config | grep -q 'Imported Family' \
+            || { echo "FAIL: tenant settings did not carry across"; exit 1; }
+          curl -fsS -b /tmp/mj http://localhost:3300/api/events > /tmp/mev.json
+          grep -q 'One off' /tmp/mev.json      || { echo "FAIL: one-off event missing"; exit 1; }
+          grep -q 'Weekly thing' /tmp/mev.json || { echo "FAIL: recurring event missing"; exit 1; }
+          # The excluded date must not come back as an occurrence.
+          grep -q "${SKIP}T" /tmp/mev.json && { echo "FAIL: EXDATE was not honoured"; exit 1; }
+
+          # Re-importing the same export must skip, not duplicate.
+          docker exec kinboard-mig node scripts/import-kinevents.js --file /tmp/import.json --data-dir /app/data --force > /tmp/imp2.log 2>&1
+          grep -q 'events: 0' /tmp/imp2.log || { echo "FAIL: re-import was not idempotent"; cat /tmp/imp2.log; exit 1; }
+          echo "kinevents import works against the current schema"
+
       - name: App must run as a non-root user
         run: |
           # Read the numeric uid of PID 1 from /proc rather than parsing `ps`.

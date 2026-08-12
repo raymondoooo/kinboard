@@ -78,12 +78,55 @@ if (!household) {
 }
 
 const existingEvents = raw.prepare('SELECT COUNT(*) c FROM events').get().c;
+
+// Look for events that already exist under a DIFFERENT id.
+//
+// The idempotency guarantee is "same source row, same id, skipped" — which
+// protects you from importing the same export twice, and not from anything
+// else. If you re-entered the family's events by hand while trying Kinboard
+// out, those rows carry Kinboard-generated ids and nothing matches, so the
+// import cheerfully adds a second copy of every one of them. That's the most
+// likely way this tool ruins someone's calendar, and it is invisible until
+// afterwards, so say so up front.
+function likelyDuplicates() {
+  if (!existingEvents) return [];
+  const have = new Map();
+  for (const r of raw.prepare('SELECT id, title, date FROM events').all()) {
+    have.set(`${String(r.title).trim().toLowerCase()}|${String(r.date).slice(0, 10)}`, r.id);
+  }
+  const hits = [];
+  for (const e of src.events || []) {
+    const key = `${String(e.title || '').trim().toLowerCase()}|${String(e.date || '').slice(0, 10)}`;
+    const existingId = have.get(key);
+    if (existingId && existingId !== e.id) hits.push({ title: e.title, date: String(e.date).slice(0, 10) });
+  }
+  return hits;
+}
+
+const dupes = likelyDuplicates();
+if (dupes.length) {
+  console.warn(
+    `\n⚠  ${dupes.length} incoming event(s) look like events this Kinboard already has,\n` +
+    '   under a different id — same title, same date. They will be added as\n' +
+    '   SECOND copies, because matching is by original id and these were not\n' +
+    '   created by a previous import.\n'
+  );
+  for (const d of dupes.slice(0, 8)) console.warn(`     ${d.date}  ${d.title}`);
+  if (dupes.length > 8) console.warn(`     …and ${dupes.length - 8} more`);
+  console.warn(
+    '\n   If you re-entered these by hand while trying Kinboard out, delete them\n' +
+    '   first (or start from a fresh data volume) and import into an empty\n' +
+    '   calendar instead.\n'
+  );
+}
+
 if (existingEvents > 0 && !FORCE) {
   console.error(
     `\nThis Kinboard already has ${existingEvents} event(s).\n` +
     'Importing on top of real data is allowed but rarely what you want, so it\n' +
     'needs --force. Rows are matched on their original IDs, so a repeat import\n' +
-    'of the same export is safe and will simply skip everything.\n'
+    'of the same export is safe and will simply skip everything — but see the\n' +
+    'duplicate warning above if there is one.\n'
   );
   process.exit(1);
 }
