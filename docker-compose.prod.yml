@@ -1,0 +1,57 @@
+# Kinboard — running a published image, no source checkout needed.
+#
+# The default docker-compose.yml builds from this repo, which is right for
+# developing but wrong for a server: copying that file alone gives you
+# `build: .` with nothing to build, `env_file: .env` pointing at a file that
+# isn't there, and a project name that collides with any other Kinboard on the
+# same host. This file is the one to copy to a server.
+#
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Two files are needed on the server: this one, and .env (copy .env.example).
+# Everything else comes from the image.
+
+# Change this if you run more than one household on the same host — the project
+# name is what keeps their containers, networks and volumes apart.
+name: kinboard
+
+services:
+  kinboard:
+    # PIN A VERSION. `latest` moves under you on the next pull, which is exactly
+    # what you don't want on the calendar the household depends on. Bump it
+    # deliberately, after reading the changelog.
+    image: raymondoooo/kinboard:0.2.1
+    restart: unless-stopped
+
+    # Optional. Delete this line if you have no .env — with it present and the
+    # file missing, compose refuses to start at all.
+    env_file: .env
+
+    environment:
+      # Behind a reverse proxy (nginx, Caddy, NPM, Cloudflare Tunnel), so the
+      # login rate limiter sees real client addresses instead of the proxy's.
+      TRUST_PROXY: "1"
+      # Serving over HTTPS, so the session cookie is marked HTTPS-only.
+      # LEAVE THIS OFF for plain-HTTP LAN access: the browser would accept the
+      # cookie at login and then refuse to send it back, and you would bounce to
+      # the login form forever with nothing explaining why.
+      SECURE_COOKIES: "true"
+
+    ports:
+      # host:container. Change the host side if 3200 is taken on this box.
+      - "3200:3000"
+
+    volumes:
+      # The SQLite database, its WAL sidecars and the nightly backups all live
+      # here. This directory IS the calendar — back it up and nothing else.
+      # A named volume works too; a bind mount is easier to back up.
+      - ./data:/app/data
+
+    # Compose won't wait on this by itself, but `docker ps` showing "unhealthy"
+    # is how you find out the process is up while the database is unreadable.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
