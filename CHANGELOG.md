@@ -6,6 +6,29 @@ means the shape of things can still change between minor releases.
 ## [Unreleased]
 
 ### Fixed
+- **Checking a chore off twice paid twice.** Nothing verified the chore was
+  actually changing state, so a second tap on an already-done chore wrote a
+  second ledger entry — no concurrency needed. Worse, five simultaneous
+  check-offs (two phones, or one retrying on a bad connection) wrote five
+  entries *and* advanced a weekly chore five weeks, so the child was overpaid
+  and the chore then vanished for a month. Completion is now one atomic
+  transaction that only records a genuine transition. A real repeat completion
+  the following week still pays normally.
+- **Reminders could fire twice on the night the clocks go back.** The window
+  compared wall-clock minutes, which assumes every hour is 60 minutes long;
+  01:30 local happens twice that night, so a reminder due then went out twice —
+  an hour apart, the first an hour early. Reminders now compare real instants,
+  which makes duplicates impossible by construction. Verified as exactly one
+  reminder per day for all 365 days of 2026 across eight timezones, including
+  both hemispheres' DST and the 30- and 45-minute offset zones.
+- **The daily digest could go out twice, or not at all.** It fired on "local
+  hour equals the digest hour" — an hour that occurs twice on the autumn change,
+  and not at all if the container happened to be restarting during those five
+  minutes. It now records the day it last went out, so it goes exactly once,
+  with a bounded catch-up if the machine was down at the time.
+- **Timezone offsets are cached.** The offset lookup built a fresh
+  `Intl.DateTimeFormat` every call — thousands per tick for a household with
+  several devices, forever, often on a Raspberry Pi.
 - **Editing something another device just deleted returned 500.** The database
   shim reports "no rows" as an error, and every update handler mapped that to a
   server fault — so a routine race on a shared family calendar (delete on the

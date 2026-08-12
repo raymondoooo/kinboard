@@ -69,7 +69,7 @@ function ensureColumn(table, column, definition) {
 // scheme report version 0 and may already have some columns from a pre-release
 // build, so schema steps go through ensureColumn rather than a bare ALTER.
 // A backup is taken before any migration runs on an existing database.
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 const MIGRATIONS = [
   {
@@ -85,6 +85,18 @@ const MIGRATIONS = [
       ensureColumn('settings', 'point_value_cents', 'integer not null default 0');
       ensureColumn('settings', 'currency_symbol', "text not null default '$'");
       // chore_completions itself is created by schema.sql (create table if not exists).
+    },
+  },
+  {
+    version: 3,
+    describe: 'remember which day the digest was last sent',
+    up() {
+      // The digest used to fire purely on "local hour == DIGEST_HOUR and minute
+      // < 5". On the autumn DST change that hour happens twice, so a digest set
+      // to it went out twice; and if the container happened to be down for those
+      // five minutes, it didn't go out at all. Recording the day it last went
+      // makes both impossible.
+      ensureColumn('settings', 'last_digest_date', 'text');
     },
   },
 ];

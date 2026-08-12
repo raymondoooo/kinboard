@@ -65,6 +65,34 @@ function nextDueDate(dateStr, pattern) {
 // Credited to every assignee rather than split between them: splitting a
 // 3-point chore between two kids invents fractions and arguments. An unassigned
 // chore credits nobody, so it simply isn't a paid chore.
+// Two taps must not pay twice.
+//
+// Checking a chore off is a read-modify-write spanning two tables: append to the
+// ledger, then advance (or close) the to-do. Nothing made that atomic and
+// nothing checked the row was actually *changing* state, so:
+//
+//   - tapping "done" on an already-done chore recorded a second payment, with
+//     no concurrency involved at all; and
+//   - five simultaneous check-offs wrote five ledger rows AND advanced a weekly
+//     chore five weeks into the future, so the kid was paid five times and the
+//     chore then vanished for a month.
+//
+// A recurring chore's `done` flag always returns to false, so "is it already
+// done?" can't identify a duplicate there. What does is time: nobody genuinely
+// completes the same chore twice within a minute, but a double-tap, a retried
+// request, and two phones at once all land inside that.
+const DUPLICATE_WINDOW_MS = 60 * 1000;
+
+function recentlyCompleted(todoId) {
+  const last = db.raw
+    .prepare("SELECT completed_at FROM chore_completions WHERE todo_id = ? ORDER BY completed_at DESC LIMIT 1")
+    .get(todoId);
+  if (!last || !last.completed_at) return false;
+  // SQLite's datetime('now') is UTC and space-separated; make it parseable.
+  const t = Date.parse(String(last.completed_at).replace(' ', 'T') + 'Z');
+  return Number.isFinite(t) && Date.now() - t < DUPLICATE_WINDOW_MS;
+}
+
 function recordCompletion(todo) {
   const people = Array.isArray(todo.people) ? todo.people.filter(Boolean) : [];
   if (!people.length) return;
@@ -119,16 +147,37 @@ async function update(req, res) {
   // Checking off a recurring to-do advances it to its next due date instead
   // of marking it permanently done — chores repeat, they don't finish.
   if (row.done === true) {
-    const { data: existing } = await db
-      .from('todos').select('id, title, due_date, recurring, points, people')
-      .eq('id', req.params.id).maybeSingle();
+    // The whole read-decide-write runs inside one SQLite transaction, so two
+    // requests arriving together are serialized rather than both acting on the
+    // state they each read first. better-sqlite3 transactions are synchronous,
+    // which is exactly what makes this safe.
+    const settle = db.raw.transaction((id) => {
+      const found = db.raw.prepare('SELECT * FROM todos WHERE id = ?').get(id);
+      if (!found) return { notFound: true };
+      const existing = db.decodeRow('todos', found);
 
-    // Record the completion BEFORE the row mutates. For a repeating chore the
-    // row is about to forget this ever happened (done flips back to false), so
-    // the ledger is the only place the earning survives.
-    if (existing) recordCompletion(existing);
+      // Already finished, or the same completion arriving twice — either way
+      // there is nothing new to pay for.
+      if (existing.done || recentlyCompleted(id)) return { duplicate: true, existing };
 
-    if (existing && existing.recurring && existing.due_date) {
+      // Record BEFORE the row mutates: a repeating chore is about to forget
+      // this ever happened (done flips back to false), so the ledger is the
+      // only place the earning survives.
+      recordCompletion(existing);
+      return { existing };
+    })(req.params.id);
+
+    if (settle.notFound) return res.status(404).json({ error: 'To-do not found' });
+
+    if (settle.duplicate) {
+      // Answer success with the row as it stands. The tap did land the first
+      // time; repeating it simply has no further effect.
+      const current = db.decodeRow('todos', db.raw.prepare('SELECT * FROM todos WHERE id = ?').get(req.params.id));
+      return res.json({ ok: true, todo: current, duplicate: true });
+    }
+
+    const existing = settle.existing;
+    if (existing.recurring && existing.due_date) {
       row.due_date = nextDueDate(existing.due_date, existing.recurring);
       row.done = false;
       row.completed_at = null;

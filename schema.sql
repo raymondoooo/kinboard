@@ -38,6 +38,7 @@ create table if not exists settings (
   share_keywords     text not null default '[]',          -- JSON array of title keywords that auto-share
   point_value_cents  integer not null default 0,          -- what one chore point is worth; 0 = points only, no money
   currency_symbol    text not null default '$',
+  last_digest_date   text,                                -- household-local YYYY-MM-DD the digest last went out
   created_at         text not null default (datetime('now'))
 );
 
