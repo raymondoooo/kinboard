@@ -27,10 +27,10 @@ jobs:
 
       - name: Start container on a clean volume
         run: |
-          docker run -d --name kinboard-ci -p 3000:3000 \
+          docker run -d --name kinboard-ci -p 3200:3200 \
             -v kinboard-ci-data:/app/data kinboard:ci
           for i in $(seq 1 30); do
-            if curl -fsS -o /dev/null http://localhost:3000/setup; then
+            if curl -fsS -o /dev/null http://localhost:3200/setup; then
               echo "up after ${i}s"; exit 0
             fi
             sleep 1
@@ -40,7 +40,7 @@ jobs:
       - name: First-run flow (setup, login, event CRUD)
         run: |
           set -e
-          B=http://localhost:3000
+          B=http://localhost:3200
 
           # Fresh install must redirect to the setup wizard.
           code=$(curl -s -o /dev/null -w '%{http_code}' "$B/")
@@ -71,7 +71,7 @@ jobs:
       - name: A hostile calendar feed must not take down the calendar
         run: |
           set -e
-          B=http://localhost:3000
+          B=http://localhost:3200
           curl -fsS -c /tmp/j -X POST "$B/api/login" \
             -H 'Content-Type: application/json' -d '{"password":"ci-password-123"}' >/dev/null
 
@@ -129,7 +129,7 @@ jobs:
       - name: Login rate limit must not be bypassable via X-Forwarded-For
         run: |
           set -e
-          B=http://localhost:3000
+          B=http://localhost:3200
           # TRUST_PROXY is unset here, so forged X-Forwarded-For values must NOT
           # create separate rate-limit buckets. Regression test for a real bug:
           # trusting that header unconditionally gave unlimited password guesses.
@@ -146,7 +146,7 @@ jobs:
       - name: Editing a deleted row must be 404, not 500
         run: |
           set -e
-          B=http://localhost:3000
+          B=http://localhost:3200
           # The API returns the event as `uid`, not `id` — toClientEvent renames it.
           id=$(curl -fsS -b /tmp/j -X POST "$B/api/events" -H 'Content-Type: application/json' \
             -d '{"title":"Doomed","date":"2030-06-01","allDay":true}' \
@@ -199,7 +199,7 @@ jobs:
       - name: Checking a chore off twice must pay once
         run: |
           set -e
-          B=http://localhost:3000
+          B=http://localhost:3200
           curl -fsS -b /tmp/j -X PATCH "$B/api/settings" -H 'Content-Type: application/json' \
             -d '{"point_value_cents":25}' >/dev/null
           curl -fsS -b /tmp/j -X POST "$B/api/members" -H 'Content-Type: application/json' \
@@ -276,7 +276,7 @@ jobs:
       - name: Subscribed calendars must trigger reminders too
         run: |
           set -e
-          B=http://localhost:3000
+          B=http://localhost:3200
           GW=$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}')
           mkdir -p /tmp/ics2 && cd /tmp/ics2
           python3 - <<'EOF'
@@ -352,7 +352,7 @@ jobs:
           # step with schema changes silently — bumping SCHEMA_VERSION once left
           # it verified only against the previous version. Runs on its own
           # container and volume so it never touches the main test instance.
-          docker run -d --name kinboard-mig -p 3300:3000 -v kinboard-mig-data:/app/data kinboard:ci
+          docker run -d --name kinboard-mig -p 3300:3200 -v kinboard-mig-data:/app/data kinboard:ci
           # 2>/dev/null: the first probes land before the server binds, and a
           # connection-reset message there reads like a failure in the log.
           for i in $(seq 1 30); do curl -fsS -o /dev/null http://localhost:3300/setup 2>/dev/null && break; sleep 1; done
@@ -443,15 +443,15 @@ jobs:
         run: |
           set -e
           docker rm -f kinboard-ci >/dev/null
-          docker run -d --name kinboard-ci2 -p 3000:3000 \
+          docker run -d --name kinboard-ci2 -p 3200:3200 \
             -v kinboard-ci-data:/app/data kinboard:ci
-          for i in $(seq 1 30); do curl -fsS -o /dev/null http://localhost:3000/ && break; sleep 1; done
+          for i in $(seq 1 30); do curl -fsS -o /dev/null http://localhost:3200/ && break; sleep 1; done
           # Setup is already done, so / must serve the app (200) rather than redirect.
-          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/)
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3200/)
           [ "$code" = "200" ] || { echo "data did not persist (got $code)"; exit 1; }
-          curl -fsS -c /tmp/j2 -X POST http://localhost:3000/api/login \
+          curl -fsS -c /tmp/j2 -X POST http://localhost:3200/api/login \
             -H 'Content-Type: application/json' -d '{"password":"ci-password-123"}' | grep -q '"ok":true'
-          curl -fsS -b /tmp/j2 http://localhost:3000/api/events | grep -q 'CI event'
+          curl -fsS -b /tmp/j2 http://localhost:3200/api/events | grep -q 'CI event'
           echo "persistence OK"
 
       - name: A newer database must refuse to boot on an older binary

@@ -20,7 +20,7 @@ const { THEMES, HEX_RE, cleanEmoji, isValidDate, isValidTime } = require('./vali
 const { dbError } = require('./respond');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3200;
 
 // Whether to believe X-Forwarded-* headers. OFF by default, and that default is
 // a security boundary, not a convenience: `trust proxy` makes Express derive
