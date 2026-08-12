@@ -160,6 +160,104 @@ function occurrencesForDates(dateKeys) {
   return out;
 }
 
+// Subscribed calendars count too.
+//
+// This is the omission that made notifications look dead: the calendar page
+// merges iCal feed events and so does the share page, but the digest and
+// reminders only ever read the `events` table. Subscribe to a school or team
+// calendar — the reason the feed feature exists — and you were reminded about
+// none of it, with nothing in the logs to say so.
+//
+// Feed failures stay contained: a calendar that won't load costs its own
+// events, never the reminder for something you typed in yourself.
+async function feedOccurrencesForDates(dateKeys) {
+  const wanted = new Set(dateKeys);
+  if (!wanted.size) return [];
+
+  let fetchFeedEvents;
+  try {
+    ({ fetchFeedEvents } = require('./index'));
+  } catch {
+    return [];
+  }
+  if (typeof fetchFeedEvents !== 'function') return [];
+
+  const feeds = db.raw.prepare('SELECT * FROM feeds').all().map((r) => db.decodeRow('feeds', r));
+  if (!feeds.length) return [];
+
+  const members = db.raw.prepare('SELECT display_name, color, member_type FROM members').all();
+  const colors = {};
+  const personNames = [];
+  const categoryNames = [];
+  for (const m of members) {
+    if (!m.display_name) continue;
+    colors[m.display_name] = m.color;
+    (m.member_type === 'category' ? categoryNames : personNames).push(m.display_name);
+  }
+
+  const sorted = [...wanted].sort();
+  const windowStart = new Date(sorted[0] + 'T00:00:00');
+  windowStart.setDate(windowStart.getDate() - 1);
+  const windowEnd = new Date(sorted[sorted.length - 1] + 'T00:00:00');
+  windowEnd.setDate(windowEnd.getDate() + 2);
+
+  const arrays = await Promise.all(feeds.map(async (f) => {
+    try {
+      return await fetchFeedEvents(f, windowStart, windowEnd, colors, personNames, categoryNames);
+    } catch (err) {
+      console.error(`[notify] feed ${f.name || f.url} failed: ${err.message}`);
+      return [];
+    }
+  }));
+
+  const tz = (getSettings() || {}).time_zone || 'America/New_York';
+  const out = [];
+  for (const fev of arrays.flat()) {
+    const local = feedStartToLocal(fev, tz);
+    if (!local || !wanted.has(local.date)) continue;
+    out.push({
+      uid: fev.uid,
+      title: fev.title,
+      start: local.start,
+      allDay: !!fev.allDay,
+      people: fev.people || [],
+      location: fev.location || null,
+      date: local.date,
+    });
+  }
+  return out;
+}
+
+// Feed occurrences carry a real UTC instant ("...T03:53:00.000Z"); events typed
+// into Kinboard carry floating local wall-clock ("...T23:53:00"). Those are the
+// same moment but a different calendar day, and everything downstream — the day
+// filter, and the lead-time maths, which re-interprets the time as local —
+// assumes the floating form. Convert before merging, or a feed event silently
+// lands on the wrong day and is dropped.
+function feedStartToLocal(fev, tz) {
+  const s = String(fev.start || '');
+  if (!s) return null;
+  // All-day feed events are already emitted as local-midnight strings.
+  if (fev.allDay || !/Z$/i.test(s)) return { date: s.slice(0, 10), start: s };
+
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return null;
+  const p = {};
+  for (const { type, value } of offsetFormatter(tz).formatToParts(d)) p[type] = value;
+  let hour = p.hour === '24' ? '00' : p.hour;
+  const date = `${p.year}-${p.month}-${p.day}`;
+  return { date, start: `${date}T${hour}:${p.minute}:${p.second}` };
+}
+
+// Everything on the calendar for these dates — typed in or subscribed.
+async function allOccurrencesForDates(dateKeys) {
+  const [own, feed] = await Promise.all([
+    Promise.resolve(occurrencesForDates(dateKeys)),
+    feedOccurrencesForDates(dateKeys),
+  ]);
+  return [...own, ...feed];
+}
+
 // Minimal stand-in for index.js's toClientEvent for non-recurring rows (which
 // expandRecurring never sees). Only the fields the notification copy needs.
 function toOccurrence(row) {
@@ -238,7 +336,8 @@ async function runDigest() {
   const tz = settings.time_zone || 'America/New_York';
   const today = localNow(tz).date;
 
-  const occs = occurrencesForDates([today]).sort((a, b) => String(a.start).localeCompare(String(b.start)));
+  const occs = (await allOccurrencesForDates([today]))
+    .sort((a, b) => String(a.start).localeCompare(String(b.start)));
   const subs = allSubscriptions().filter((s) => s.digest_enabled);
 
   const title = `${settings.name || 'Today'} — today's schedule`;
@@ -276,7 +375,7 @@ async function checkDueReminders() {
   // Look at today and tomorrow so a lead time that reaches past midnight works.
   const tomorrow = new Date(now.date + 'T12:00:00Z');
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-  const occs = occurrencesForDates([now.date, tomorrow.toISOString().slice(0, 10)])
+  const occs = (await allOccurrencesForDates([now.date, tomorrow.toISOString().slice(0, 10)]))
     .filter((o) => !o.allDay);
 
   let sent = 0;
