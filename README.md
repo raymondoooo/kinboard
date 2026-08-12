@@ -50,6 +50,7 @@ set — they're for hardening and integration.
 | `DIGEST_HOUR` | `7` | Hour (0–23, your household's timezone) to send the daily digest. |
 | `WEBHOOK_URL` / `WEBHOOK_TYPE` | *(off)* | ntfy / Discord / Slack / JSON notification fallback — see [Notifications](#notifications). |
 | `FEED_MAX_MB` | `10` | Largest calendar Kinboard will download from a subscribed feed. Raise it only if you have a genuinely enormous calendar. |
+| `DATA_DIR` | `./data` | Where the SQLite database, its WAL sidecars and backups live. The image mounts this as a volume. |
 | `DONATE_URL` | the project's Ko-fi | Where the "Support Kinboard" button points. Set it to an empty value to hide the button. |
 
 Everything else (calendar name, time zone, theme, weather ZIP, holidays, family members,
