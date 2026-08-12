@@ -3,6 +3,18 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.2.6] — 2026-08-12
+
+### Fixed
+- **"A subscription with a different applicationServerKey already exists."**
+  Enabling notifications failed outright if the browser still held a push
+  subscription for this origin from a different Kinboard instance. Every
+  Kinboard generates its own VAPID keypair on first use, so moving host,
+  restoring a backup, or migrating onto a fresh data volume all produce exactly
+  this — and the only way out was clearing site data. Kinboard now notices the
+  key doesn't match, unsubscribes, and resubscribes, which is what the browser's
+  own error message asks for.
+
 ## [0.2.5] — 2026-08-12
 
 ### Fixed
