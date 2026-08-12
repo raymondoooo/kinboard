@@ -6,6 +6,14 @@ means the shape of things can still change between minor releases.
 ## [Unreleased]
 
 ### Fixed
+- **Push never worked on iPhones or iPads.** The default VAPID subject was
+  `mailto:kinboard@localhost`. Apple validates that claim and rejects it with a
+  403; Google and Microsoft accept it, so notifications worked on Android and
+  Windows and failed silently on every Apple device — the only symptom being
+  "Nothing was sent" in Settings and a bare `403` in the log. The default is now
+  an https URL, which every push service accepts. An invalid `VAPID_SUBJECT`
+  override is ignored with a warning instead of half-breaking, and a 403 now
+  logs which service rejected it and why.
 - **Subscribed calendars never triggered notifications.** The calendar page
   merged iCal feed events and so did the share page, but the digest and
   reminders only ever read events typed into Kinboard. Subscribe to a school or

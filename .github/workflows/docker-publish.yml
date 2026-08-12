@@ -322,6 +322,29 @@ jobs:
           echo "$out" | grep -q 'SEL:Feed practice' || { echo "FAIL: subscribed calendar did not trigger a reminder"; echo "$out"; exit 1; }
           echo "typed-in and subscribed events both trigger reminders"
 
+      - name: VAPID subject must be one Apple will accept
+        run: |
+          # Apple validates the VAPID `sub` claim and rejects anything that isn't
+          # an https URL or a mailto with a real domain. The old default,
+          # mailto:kinboard@localhost, was accepted by Google and Microsoft and
+          # refused by Apple with a bare 403 — so push worked everywhere except
+          # iPhones and iPads, and the only symptom was "Nothing was sent".
+          out=$(docker exec kinboard-ci node -e "
+            const src=require('fs').readFileSync('/app/server/push.js','utf8');
+            eval(src.match(/const DEFAULT_VAPID_SUBJECT[\s\S]*?\n}/)[0]);
+            const ok=s=>/^https:\/\/[^\s\/]+\.[^\s\/]+/i.test(s)||/^mailto:[^@\s]+@[^@\s.]+\.[^@\s.]+/i.test(s);
+            delete process.env.VAPID_SUBJECT;
+            const d=vapidSubject();
+            if(!ok(d)){ console.log('BAD_DEFAULT:'+d); process.exit(1); }
+            process.env.VAPID_SUBJECT='mailto:kinboard@localhost';
+            if(vapidSubject()!==d){ console.log('BAD_OVERRIDE_NOT_REJECTED'); process.exit(1); }
+            process.env.VAPID_SUBJECT='mailto:real@example.com';
+            if(vapidSubject()!=='mailto:real@example.com'){ console.log('VALID_OVERRIDE_REJECTED'); process.exit(1); }
+            console.log('OK:'+d);
+          " 2>&1) || { echo "FAIL: $out"; exit 1; }
+          echo "$out" | grep -q '^OK:' || { echo "FAIL: $out"; exit 1; }
+          echo "$out"
+
       - name: App must run as a non-root user
         run: |
           # Read the numeric uid of PID 1 from /proc rather than parsing `ps`.
