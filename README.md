@@ -19,7 +19,7 @@ compose:
 ```sh
 docker run -d --name kinboard -p 3200:3200 \
   -v kinboard-data:/app/data --restart unless-stopped \
-  raymondoooo/kinboard:0.2.2
+  raymondoooo/kinboard:0.2.3
 ```
 
 Also on GHCR as `ghcr.io/raymondoooo/kinboard`. To build from a checkout instead, see
