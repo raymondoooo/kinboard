@@ -168,9 +168,26 @@ const run = raw.transaction(() => {
     jsonArr(t.share_keywords)
   );
 
+  // Match members by NAME, not just by id. A fresh Kinboard is created with the
+  // default categories — Family, Birthday, Anniversary, Holiday — and kinevents
+  // has the same four under different ids, so matching on id alone gave every
+  // migrated household two of each. Name is the right key regardless: events
+  // store `people` as display names, not member ids, so two rows sharing a name
+  // are the same person as far as the calendar is concerned.
+  const existingNames = new Set(
+    raw.prepare('SELECT display_name FROM members').all()
+      .map((r) => String(r.display_name || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
+
   for (const m of src.members || []) {
     if (!m.display_name) continue;              // pending invites have no name yet
     if (exists('members', m.id)) { skipped.members++; continue; }
+    if (existingNames.has(String(m.display_name).trim().toLowerCase())) {
+      skipped.members++;
+      continue;
+    }
+    existingNames.add(String(m.display_name).trim().toLowerCase());
     raw.prepare(`INSERT INTO members (id, display_name, color, emoji, member_type, created_at)
                  VALUES (?, ?, ?, ?, ?, ?)`)
       .run(m.id, txt(m.display_name), txt(m.color), txt(m.emoji),
