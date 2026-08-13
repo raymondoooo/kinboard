@@ -2034,6 +2034,7 @@ let dailyWeather = {};
 let activeFilter = null;
 let editMode = null;
 let detailEv = null;
+let pendingSaveController = null; // the in-flight add/edit-event request, so Cancel can actually abort it
 let aePeople = [];       // people currently selected in the add/edit event form's chip row
 let detailPeople = [];   // people currently selected in the detail popup's edit-mode chip row
 let authed = false; // set from /api/config's `authed` field and by login/logout
@@ -2454,6 +2455,14 @@ function openAddForm(dateStr) {
 }
 
 function closeAddForm() {
+  // Abort a save still in flight. Without this, "Cancel" only stopped the UI
+  // from waiting — the fetch kept running, and on a slow-but-not-dead
+  // connection the event still got created moments later with nobody told,
+  // since nothing was still awaiting that response. Reproduced: hang the
+  // request, click Cancel, let it resolve — the event existed anyway. This is
+  // the one choke point closeAddForm() is called from (Cancel, clicking
+  // outside the overlay, Escape), so aborting here covers all three.
+  if (pendingSaveController) { pendingSaveController.abort(); pendingSaveController = null; }
   document.getElementById('add-overlay').classList.remove('open');
 }
 
@@ -2626,27 +2635,36 @@ async function doSave(scope) {
         }
       }
     }
+    const controller = new AbortController();
+    pendingSaveController = controller;
     if (!editMode) {
       // deviceId lets the server skip push-notifying the very device that
       // created this event (see server/notify.js notifyEventAdded).
       res = await apiFetch('/api/events', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...d, deviceId: kbDeviceId() })
+        body: JSON.stringify({ ...d, deviceId: kbDeviceId() }), signal: controller.signal
       });
     } else {
       const qs = scope === 'one' ? `?instanceStart=${encodeURIComponent(editMode.instanceStart)}` : '';
       res = await apiFetch(`/api/events/${encodeURIComponent(editMode.uid)}${qs}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(d)
+        body: JSON.stringify(d), signal: controller.signal
       });
     }
+    pendingSaveController = null;
     if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || `Server error ${res.status}`); }
     await loadEvents();
     render();
     closeAddForm();
   } catch (err) {
-    alert((editMode ? 'Could not save changes: ' : 'Could not add event: ') + err.message);
+    // A deliberate Cancel already closed the form — an "Could not add event"
+    // alert popping up right after would just be confusing noise about the
+    // user's own action.
+    if (err.name !== 'AbortError') {
+      alert((editMode ? 'Could not save changes: ' : 'Could not add event: ') + err.message);
+    }
   } finally {
+    pendingSaveController = null;
     [submit, one, all].forEach(b => b.disabled = false);
     active.textContent = prevLabel;
   }
