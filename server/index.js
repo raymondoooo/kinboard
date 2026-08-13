@@ -748,11 +748,25 @@ async function fetchFeedEvents(feed, windowStart, windowEnd, memberColors = {}, 
 
       // Bounded expansion. `FREQ=MINUTELY` over the 13-month display window is
       // ~570,000 occurrences: it pinned a core at 100% indefinitely, and every
-      // browser refresh started another one. rrule's iterator callback stops
-      // the walk at the cap instead of materializing the whole series first.
+      // browser refresh started another one.
+      //
+      // The iterator callback is node-ical's own `rrule` compat layer for
+      // in-app series, and it stops the walk early there. node-ical's feed
+      // objects go through a DIFFERENT engine (rrule-temporal, since node-ical
+      // 0.2x) whose between() ignores this callback entirely — confirmed by
+      // instrumenting it: `taken` never advances past 0. It has its own
+      // internal ceiling (throws past ~10,000 raw iterations), which stops the
+      // worst case but is far looser than MAX_OCCURRENCES_PER_EVENT, so an
+      // hourly feed over the window still returned ~8,700 occurrences
+      // uncapped. The slice below is what actually enforces the limit,
+      // regardless of which engine is behind ev.rrule; the callback stays as a
+      // free early-exit on engines that do honor it.
       let taken = 0;
-      const occs = ev.rrule.between(windowStart, windowEnd, true, () => ++taken < MAX_OCCURRENCES_PER_EVENT);
-      if (taken >= MAX_OCCURRENCES_PER_EVENT) {
+      let occs = ev.rrule.between(windowStart, windowEnd, true, () => ++taken < MAX_OCCURRENCES_PER_EVENT);
+      if (occs.length > MAX_OCCURRENCES_PER_EVENT) {
+        occs = occs.slice(0, MAX_OCCURRENCES_PER_EVENT);
+        console.warn(`[feeds] ${feed.name || feed.url}: "${ev.summary || ev.uid}" repeats too often — showing the first ${MAX_OCCURRENCES_PER_EVENT}`);
+      } else if (taken >= MAX_OCCURRENCES_PER_EVENT) {
         console.warn(`[feeds] ${feed.name || feed.url}: "${ev.summary || ev.uid}" repeats too often — showing the first ${MAX_OCCURRENCES_PER_EVENT}`);
       }
       for (const rawOcc of occs) {
