@@ -1292,6 +1292,7 @@ app.get('/api/todos',        auth.requireAuth, todos.list);
 app.post('/api/todos',       auth.requireAuth, todos.create);
 app.patch('/api/todos/:id',  auth.requireAuth, todos.update);
 app.delete('/api/todos/:id', auth.requireAuth, todos.remove);
+app.post('/api/todos/:id/skip', auth.requireAuth, todos.skip);
 
 // Chore points — per-person totals, history, and settling up.
 app.get('/api/chores/earnings',    auth.requireAuth, todos.earnings);
