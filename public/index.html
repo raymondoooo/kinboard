@@ -1468,6 +1468,17 @@
     white-space: nowrap;
   }
   .todo-due { font-size: 0.72rem; color: var(--muted); flex-shrink: 0; }
+  .todo-skip {
+    background: none;
+    border: 1px solid var(--grid-line);
+    border-radius: 4px;
+    color: var(--muted);
+    font-size: 0.68rem;
+    cursor: pointer;
+    padding: 2px 7px;
+    flex-shrink: 0;
+  }
+  .todo-skip:hover { color: var(--text); border-color: var(--muted); }
   .todo-delete {
     background: none;
     border: none;
@@ -1488,6 +1499,7 @@
   body.read-only .todo-row { cursor: default; }
   body.read-only .todo-title { pointer-events: none; }
   body.read-only .todo-row input[type=checkbox],
+  body.read-only .todo-skip,
   body.read-only .todo-delete { display: none !important; }
 
   #meal-overlay {
@@ -3513,6 +3525,19 @@ function renderTodos() {
       row.appendChild(due);
     }
 
+    // Only a repeating chore has a "next occurrence" to skip to — a one-off
+    // to-do that gets missed is just late, not skippable.
+    if (t.recurring) {
+      const skip = document.createElement('button');
+      skip.type = 'button';
+      skip.className = 'todo-skip';
+      skip.setAttribute('aria-label', 'Skip to next occurrence');
+      skip.title = 'Missed it — skip to the next occurrence, no credit';
+      skip.textContent = 'Skip';
+      skip.addEventListener('click', (e) => { e.stopPropagation(); skipTodo(t.id); });
+      row.appendChild(skip);
+    }
+
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'todo-delete';
@@ -3532,6 +3557,13 @@ async function toggleTodo(id, done) {
   // Checking a chore off is what mints points, so the balance has to move in
   // the same beat — that immediate feedback is the whole motivation loop.
   if (done) { await loadChoreEarnings(); renderChoreEarnings(); }
+}
+
+async function skipTodo(id) {
+  const res = await apiFetch(`/api/todos/${id}/skip`, { method: 'POST' });
+  if (!res.ok) { const err = await res.json().catch(() => ({})); alert(err.error || 'Could not skip this chore'); return; }
+  await loadTodos();
+  renderTodos();
 }
 
 async function deleteTodo(id) {

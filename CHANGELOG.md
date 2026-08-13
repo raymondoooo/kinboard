@@ -3,6 +3,16 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.2.9] — 2026-08-13
+
+### Added
+- **Skip a missed chore.** A repeating chore that got missed had two bad
+  options before: check it off (pays for work that didn't happen) or leave
+  it sitting overdue forever. A "Skip" button on any repeating chore moves
+  it straight to its next occurrence with no completion recorded and no
+  points paid. One-off to-dos don't show the button — there's no "next
+  occurrence" to skip to for something that only happens once.
+
 ## [0.2.8] — 2026-08-13
 
 ### Fixed
