@@ -3,6 +3,33 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.2.8] — 2026-08-13
+
+### Fixed
+- **Cancelling an add/edit while it was saving didn't actually stop it.** The
+  Cancel button only stopped the UI from waiting on the request — the fetch
+  itself kept running, and on a slow-but-not-dead connection the event still
+  got created moments later with nobody told. Reproduced: hang the save,
+  click Cancel, let the connection resolve — the event existed anyway. Wired
+  an AbortController through the save so Cancel (and clicking outside the
+  form, and Escape) genuinely cancels the in-flight request.
+
+### Verified, no changes needed
+Ran the stress tests flagged as unaudited after the last release:
+- **Front end under a bad connection** — outright failure surfaces a clear
+  error and re-enables the form; a slow connection shows a real loading
+  state, not a blank page; retry after a failed save never duplicates the
+  event; the one gap found is the Cancel fix above.
+- **Service worker update behavior** — no caching exists (the fetch handler
+  is pure network pass-through), so there's no stale-JS risk by design. A new
+  deploy's worker takes over starting the household's second page load after
+  it ships (confirmed directly, not inferred) — standard `skipWaiting`/
+  `clients.claim` behavior, not a bug.
+- **Push delivery under failure** — a batch with dead, VAPID-rejected, and
+  network-erroring subscriptions mixed with real ones sends to every
+  reachable device independently; only genuinely dead endpoints (404/410)
+  get pruned; verified at 250 subscriptions with no slowdown.
+
 ## [0.2.7] — 2026-08-12
 
 ### Fixed
