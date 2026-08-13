@@ -197,6 +197,29 @@ async function update(req, res) {
   res.json({ ok: true, todo: data });
 }
 
+// Move a repeating chore straight to its next occurrence with no completion
+// recorded — for when a kid genuinely missed it. Checking it off would pay
+// for work that didn't happen; leaving it would make it sit overdue forever.
+async function skip(req, res) {
+  const found = db.raw.prepare('SELECT * FROM todos WHERE id = ?').get(req.params.id);
+  if (!found) return res.status(404).json({ error: 'To-do not found' });
+  const existing = db.decodeRow('todos', found);
+  if (!existing.recurring || !existing.due_date) {
+    return res.status(400).json({ error: 'Only a repeating chore with a due date can be skipped' });
+  }
+
+  const row = {
+    due_date: nextDueDate(existing.due_date, existing.recurring),
+    done: false,
+    completed_at: null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await db.from('todos').update(row).eq('id', req.params.id).select().single();
+  if (error) return dbError(res, error, 'To-do not found');
+  res.json({ ok: true, todo: data });
+}
+
 async function remove(req, res) {
   const { error } = await db
     .from('todos')
@@ -268,4 +291,4 @@ async function payout(req, res) {
   res.json({ ok: true, settled: info.changes });
 }
 
-module.exports = { list, create, update, remove, earnings, completions, payout };
+module.exports = { list, create, update, remove, skip, earnings, completions, payout };
