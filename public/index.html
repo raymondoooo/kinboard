@@ -2087,9 +2087,33 @@ function toDateInputValue(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-// Express an ISO instant as { date, time } wall-clock in the display timezone — used to
+// The server sends two genuinely different kinds of timestamp, and telling them
+// apart is the whole ballgame:
+//
+//   - Events typed into Kinboard are WALL-CLOCK times with no zone at all
+//     ("2026-08-12T17:30"). "Soccer at 5:30" means 5:30 where the family lives.
+//   - Events pulled from a subscribed iCal feed are absolute instants, emitted
+//     by toISOString() ("2026-08-12T21:30:00.000Z"). Those must be converted
+//     into the household's zone to land on the right day at the right time.
+//
+// Passing a zone-less string through `new Date()` parses it in the VIEWER's
+// zone; formatting that with the household's zone then applies the offset a
+// SECOND time. At home the two cancel out so it looks fine, which is why this
+// survived — but on a phone set to another zone every typed event silently
+// shifted, and in the edit form the shifted value got saved back, permanently
+// corrupting the time.
+function hasExplicitZone(s) {
+  return /(?:Z|[+-]\d{2}:?\d{2})$/.test(String(s));
+}
+
+// Express a timestamp as { date, time } wall-clock in the display timezone — used to
 // pre-fill the edit form so values round-trip correctly regardless of the device's zone.
 function tzParts(iso) {
+  // Already wall-clock: read the literal fields. Converting would corrupt them.
+  const naive = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(String(iso));
+  if (naive && !hasExplicitZone(iso)) {
+    return { date: naive[1], time: `${naive[2]}:${naive[3]}` };
+  }
   const tz = (appConfig && appConfig.timeZone) || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const f = new Intl.DateTimeFormat('en-CA', {
     timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
@@ -2819,6 +2843,16 @@ function eventsForDay(date) {
 }
 
 function formatTime(dateStr) {
+  // A zone-less timestamp is already wall-clock in the household's zone — show
+  // its literal hour rather than converting it. See hasExplicitZone() above.
+  const naive = /T(\d{2}):(\d{2})/.exec(String(dateStr));
+  if (naive && !hasExplicitZone(dateStr)) {
+    const hh = Number(naive[1]);
+    const mm = naive[2];
+    const ampm = hh < 12 ? 'AM' : 'PM';
+    const h12 = hh % 12 || 12;
+    return mm === '00' ? `${h12}${ampm}` : `${h12}:${mm}${ampm}`;
+  }
   const d = new Date(dateStr);
   const tz = (appConfig && appConfig.timeZone) || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const parts = new Intl.DateTimeFormat('en-US', {
