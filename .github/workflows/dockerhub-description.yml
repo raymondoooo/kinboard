@@ -1,0 +1,35 @@
+# Docker Hub's listing page is the first thing most people see, and it had drifted
+# from the repo — it told users to map `-p 3200:3000`, which is the wrong container
+# port and fails on first run. Keeping it in a file here, synced automatically,
+# means it can't silently go stale again the way a hand-edited web form does.
+#
+# docs/DOCKERHUB.md rather than README.md: Docker Hub cannot render the README's
+# relative image paths, so that file carries absolute raw.githubusercontent URLs.
+name: sync Docker Hub description
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/DOCKERHUB.md
+      - .github/workflows/dockerhub-description.yml
+  # Lets the description be re-pushed without touching the file — useful after
+  # rotating the token, or to recover if a run failed.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  description:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ secrets.DOCKERHUB_USERNAME }}/kinboard
+          short-description: "A private family calendar you host yourself — events, meals, chores, iCal feeds, push. One container, SQLite, no accounts."
+          readme-filepath: ./docs/DOCKERHUB.md
