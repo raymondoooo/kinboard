@@ -3,6 +3,28 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.2.10] — 2026-08-14
+
+### Fixed
+- **Event times were wrong for anyone in a different timezone from the
+  household.** A time you type in is a wall-clock time — "soccer at 5:30"
+  means 5:30 where the family lives — and the server stores and sends it
+  with no timezone attached, exactly so it can't drift. The front end then
+  parsed that zone-less string in the *viewer's* timezone and formatted the
+  result in the *household's*, applying the offset twice. At home the two
+  cancel out, which is why it went unnoticed; on a phone set to another zone
+  every typed event silently shifted. Verified against the released build:
+  an event entered as 17:30 in an Eastern household showed 1:30PM in UTC,
+  8:30PM in Los Angeles, 4:30AM in Tokyo and 3:30AM in Sydney. It now reads
+  5:30PM in all of them.
+- **The same bug could permanently corrupt the time.** The edit form was
+  pre-filled through the same path, so opening an event on a travelling
+  device and saving it wrote the shifted time back to the database.
+- Events imported from a subscribed iCal feed are genuinely absolute
+  instants (the server emits them as UTC), and are still converted into the
+  household's timezone as before — the fix only changes handling of
+  timestamps that carry no zone at all.
+
 ## [0.2.9] — 2026-08-13
 
 ### Added
