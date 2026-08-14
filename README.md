@@ -5,6 +5,27 @@ feed subscriptions, and view-only share links — in a single Docker container w
 database. No account system, no cloud dependency, no subscription: one shared household
 password, your data stays on your own disk.
 
+![The month view](docs/screenshots/calendar-month.png)
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/chores-earnings.png" alt="Chores with earnings"></td>
+<td width="50%"><img src="docs/screenshots/meal-planner.png" alt="Meal planner"></td>
+</tr>
+<tr>
+<td align="center"><em>Chores, with what each kid has earned</em></td>
+<td align="center"><em>The week's meals</em></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/mobile-agenda.png" alt="Agenda view on a phone"></td>
+<td width="50%"><img src="docs/screenshots/settings.png" alt="Settings"></td>
+</tr>
+<tr>
+<td align="center"><em>Agenda view on a phone</em></td>
+<td align="center"><em>Settings, including seven themes</em></td>
+</tr>
+</table>
+
 ## Quick start
 
 Save [`docker-compose.yml`](docker-compose.yml) somewhere and run:
