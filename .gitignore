@@ -2,3 +2,10 @@ node_modules/
 data/
 .env
 *.log
+
+# Calendar exports produced by scripts/export-kinevents.sh. These contain a real
+# household's names, home coordinates, appointments and feed URLs (some with auth
+# tokens in them) — one was committed here by accident and had to be purged from
+# history. Never commit one.
+kinevents-*.json
+*-export.json
