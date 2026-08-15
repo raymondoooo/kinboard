@@ -6,6 +6,9 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main]
+  # Lets the Docker Hub description be re-synced on its own. Without this, fixing
+  # a typo on the listing would mean cutting a release nobody wants.
+  workflow_dispatch:
 
 # packages:write is what lets the publish job push to GHCR using the built-in
 # GITHUB_TOKEN — no extra secret needed for that registry.
@@ -644,3 +647,38 @@ jobs:
           sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # A separate job, not a step of `publish`: if this fails, the images pushed perfectly well and
+  # only the listing text didn't. Folding it into `publish` reports "the release broke", which is
+  # false and sends you looking in the wrong place.
+  #
+  # workflow_dispatch + always() make it runnable on its own — re-running a failed release re-runs
+  # that tag's workflow, which is the version that failed. always() is what stops `needs: publish`
+  # skipping this job when publish is itself skipped (the no-tag dispatch case).
+  describe:
+    needs: publish
+    if: >-
+      always() &&
+      needs.publish.result != 'failure' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # The `secrets` context can't be read from an `if:`, so map it to an env var first.
+    env:
+      HAS_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD != '' }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Sync Docker Hub description
+        if: env.HAS_PASSWORD == 'true'
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          repository: ${{ secrets.DOCKERHUB_USERNAME }}/kinboard
+          short-description: "Self-hosted family calendar — events, meals, chores, iCal feeds, push. One container, SQLite."
+          readme-filepath: ./docs/DOCKERHUB.md
+      - name: Note when the sync was skipped
+        if: env.HAS_PASSWORD != 'true'
+        run: echo "DOCKERHUB_PASSWORD not set — description unchanged. Images published normally."
