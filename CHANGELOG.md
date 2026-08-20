@@ -3,6 +3,17 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.2.11] — 2026-08-20
+
+### Added
+- **Upload a .ics file for one-time import**, not just a URL. Settings →
+  "Ingest a calendar" now takes either an iCal URL or a file you've already
+  downloaded (Google/Apple/Outlook exports, a file a school emailed you,
+  anything with no reachable link). Picking one clears the other, so it's
+  never ambiguous which source an import used. Sized the same as a live
+  feed's own download cap (`FEED_MAX_MB`, 10MB by default) rather than the
+  256kb ceiling every other request is held to.
+
 ## [0.2.10] — 2026-08-14
 
 ### Fixed

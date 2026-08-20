@@ -77,8 +77,14 @@ process.on('uncaughtException', (err) => {
 
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 // Explicit cap. Every payload here is a handful of fields; a limit keeps a
-// single large POST from becoming a memory problem.
-app.use(express.json({ limit: '256kb' }));
+// single large POST from becoming a memory problem. A one-time calendar
+// import is the one legitimate exception — a user's own exported .ics can
+// be genuinely large — so that route gets its own parser (sized like a live
+// feed's download cap, below) instead of raising this limit for everyone.
+app.use((req, res, next) => {
+  if (req.method === 'POST' && req.path === '/api/feeds/import') return next();
+  express.json({ limit: '256kb' })(req, res, next);
+});
 app.use(cookieParser());
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.path}`);
@@ -377,7 +383,8 @@ const FEED_CACHE_TTL = 3 * 60 * 1000; // 3 min — how quickly source-calendar e
 // fetched over the network, that we then expand and serialize. A single bad
 // VEVENT used to hang every calendar load permanently, and one high-frequency
 // RRULE could pin a CPU forever. These caps bound both.
-const FEED_MAX_BYTES = Math.max(1, Number(process.env.FEED_MAX_MB) || 10) * 1024 * 1024;
+const FEED_MAX_MB = Math.max(1, Number(process.env.FEED_MAX_MB) || 10);
+const FEED_MAX_BYTES = FEED_MAX_MB * 1024 * 1024;
 const MAX_OCCURRENCES_PER_EVENT = 2000; // ~5.5 years of daily, well past the 13-month window
 const MAX_EVENTS_PER_FEED = 10000;
 
@@ -1311,9 +1318,18 @@ app.post('/api/chores/payout',     auth.requireAuth, todos.payout);
 //                                       the master's exdates and the override becomes its
 //                                       own one-off row, mirroring "edit one occurrence"
 // `dryRun: true` parses and counts without writing anything, for a preview step.
-app.post('/api/feeds/import', auth.requireAuth, async (req, res) => {
+// Own body-parser limit: an uploaded .ics rides in the JSON body as a plain
+// string, so this has to accommodate the same size a live feed download does
+// (FEED_MAX_MB), not the 256kb every other endpoint is capped to above.
+app.post('/api/feeds/import', express.json({ limit: `${FEED_MAX_MB}mb` }), auth.requireAuth, async (req, res) => {
   const url = (req.body.url || '').trim();
-  if (!/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'Valid url required' });
+  // Either a URL to fetch or the already-downloaded file's text — never both
+  // asked for, so a pasted URL can't be silently ignored in favor of a stale
+  // uploaded file left over from a previous attempt.
+  const icsText = typeof req.body.icsText === 'string' ? req.body.icsText : '';
+  if (!icsText && !/^https?:\/\//i.test(url)) {
+    return res.status(400).json({ error: 'Provide a valid iCal URL or upload a .ics file' });
+  }
   const dryRun = !!req.body.dryRun;
   const fallbackPerson = (req.body.person || '').trim().slice(0, 30) || null;
   const settings = await getSettings();
@@ -1325,9 +1341,9 @@ app.post('/api/feeds/import', auth.requireAuth, async (req, res) => {
 
   let data;
   try {
-    data = await ical.async.parseICS(await fetchIcsText(url, 20000));
+    data = await ical.async.parseICS(icsText || await fetchIcsText(url, 20000));
   } catch (err) {
-    return res.status(502).json({ error: `Could not fetch calendar: ${err.message}` });
+    return res.status(502).json({ error: `Could not ${icsText ? 'parse the uploaded file' : 'fetch calendar'}: ${err.message}` });
   }
 
   const { data: members = [] } = await db.from('members').select('display_name, member_type');
@@ -1502,11 +1518,15 @@ app.post('/api/feeds/import', auth.requireAuth, async (req, res) => {
   }
 
   // Auto-remove the matching feed subscription so events don't show twice.
+  // Only applies to a URL import — an uploaded file was never a live
+  // subscription, so there's nothing to match against.
   let removedFeed = false;
-  const { data: matchingFeed } = await db.from('feeds').select('id').eq('url', url).maybeSingle();
-  if (matchingFeed) {
-    const { error: delErr } = await db.from('feeds').delete().eq('id', matchingFeed.id);
-    removedFeed = !delErr;
+  if (url) {
+    const { data: matchingFeed } = await db.from('feeds').select('id').eq('url', url).maybeSingle();
+    if (matchingFeed) {
+      const { error: delErr } = await db.from('feeds').delete().eq('id', matchingFeed.id);
+      removedFeed = !delErr;
+    }
   }
 
   res.json({ ok: true, dryRun: false, insertedSeries, insertedSingles, insertedOverrides, skipped, removedFeed });

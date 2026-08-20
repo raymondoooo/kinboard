@@ -45,7 +45,7 @@ docker run -d --name kinboard -p 3200:3200 \
 
 The compose file tracks `latest` and re-checks the registry each time you bring it
 up, so `docker compose up -d` keeps you current. Prefer to stay put? Pin the image
-(`raymondoooo/kinboard:0.2.10`) and remove `pull_policy: always`. Settings shows the
+(`raymondoooo/kinboard:0.2.11`) and remove `pull_policy: always`. Settings shows the
 version you're actually running, either way.
 
 Also on GHCR as `ghcr.io/raymondoooo/kinboard`. To build from a checkout instead, see
@@ -168,7 +168,8 @@ yours to run, and your family's schedule never leaves your machine.
   time a repeating chore comes round
 - Live iCal feed subscriptions (school, sports, work) with automatic person/color detection
   from event titles
-- One-time calendar import (migrate off a live feed into native, editable events)
+- One-time calendar import, from a URL or an uploaded `.ics` file (migrate off a live feed —
+  or a calendar you only ever got as a download — into native, editable events)
 - View-only share link + a `.ics` subscription URL, with keyword-based auto-sharing so only
   what you choose leaves the household
 - Optional public (no-password) read-only calendar
