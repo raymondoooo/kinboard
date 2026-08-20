@@ -620,6 +620,12 @@
         </div>
 
         <div class="field">
+          <label for="import-file">…or a .ics file you've already downloaded</label>
+          <input id="import-file" type="file" accept=".ics,text/calendar" />
+          <p class="hint" id="import-file-name" style="display:none;"></p>
+        </div>
+
+        <div class="field">
           <label for="import-person">Assign unmatched events to</label>
           <select id="import-person"></select>
         </div>
@@ -1157,12 +1163,50 @@
       };
     }
 
+    // Holds the uploaded file's text once read — kept separate from the URL
+    // field so a large .ics never round-trips through a visible input value.
+    let importFileText = null;
+
     function importRequestBody(dryRun) {
-      const url = document.getElementById('import-url').value.trim();
       const person = document.getElementById('import-person').value;
       const { rangeStart, rangeEnd } = importRangeDates();
+      // A chosen file always wins over a leftover URL — they're mutually
+      // exclusive in the UI (picking one clears the other), so this is just
+      // the last line of defense.
+      if (importFileText) return { icsText: importFileText, person, rangeStart, rangeEnd, dryRun };
+      const url = document.getElementById('import-url').value.trim();
       return { url, person, rangeStart, rangeEnd, dryRun };
     }
+
+    function clearImportFile() {
+      importFileText = null;
+      document.getElementById('import-file').value = '';
+      document.getElementById('import-file-name').style.display = 'none';
+    }
+
+    document.getElementById('import-file').addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      const nameEl = document.getElementById('import-file-name');
+      lastImportPreview = null; // source changed — the last Preview no longer applies
+      document.getElementById('import-run-btn').style.display = 'none';
+      if (!file) { importFileText = null; nameEl.style.display = 'none'; return; }
+      try {
+        importFileText = await file.text();
+      } catch {
+        toast('Could not read that file', 'err');
+        clearImportFile();
+        return;
+      }
+      document.getElementById('import-url').value = '';
+      nameEl.textContent = `Using ${file.name} (${Math.max(1, Math.round(file.size / 1024))} KB) — clears the URL field above.`;
+      nameEl.style.display = '';
+    });
+
+    document.getElementById('import-url').addEventListener('input', () => {
+      // Typing a URL after picking a file means the file should be dropped —
+      // otherwise the file would silently keep winning per importRequestBody().
+      if (importFileText) clearImportFile();
+    });
 
     document.getElementById('import-range').addEventListener('change', e => {
       document.getElementById('import-custom-range').style.display = e.target.value === 'custom' ? '' : 'none';
@@ -1170,7 +1214,9 @@
 
     document.getElementById('import-preview-btn').addEventListener('click', async () => {
       const url = document.getElementById('import-url').value.trim();
-      if (!/^https?:\/\//i.test(url)) { toast('Enter a valid iCal URL first', 'err'); return; }
+      if (!importFileText && !/^https?:\/\//i.test(url)) {
+        toast('Enter a valid iCal URL or choose a .ics file', 'err'); return;
+      }
       const resultEl = document.getElementById('import-result');
       const runBtn = document.getElementById('import-run-btn');
       runBtn.style.display = 'none';
@@ -1223,6 +1269,8 @@
           feeds = feeds.filter(f => f.url !== currentBody.url);
           renderFeeds();
         }
+        document.getElementById('import-url').value = '';
+        clearImportFile();
         toast('Import complete', 'ok');
       } catch (e) {
         toast(e.message, 'err');
