@@ -1,0 +1,25 @@
+name: Vulnerability scan
+
+# Docker Scout's free tier only covers a handful of repos; this gives the same
+# signal — "a CVE was disclosed against the image people are actually
+# running" — with no cap. Dependabot doesn't cover this: it watches manifests,
+# not the published image, so a CVE in something baked into the base layer
+# (or vendored inside a tool like npm) never shows up there.
+on:
+  schedule:
+    - cron: '0 8 * * 1'   # Monday morning
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: raymondoooo/kinboard:latest
+          severity: HIGH,CRITICAL
+          # Without this, every finding upstream hasn't patched yet turns into
+          # a weekly red X with nothing actionable behind it — which is how you
+          # end up ignoring the whole workflow, unpatched CVE or not.
+          ignore-unfixed: true
+          exit-code: '1'
