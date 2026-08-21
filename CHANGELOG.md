@@ -3,6 +3,22 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.2.12] — 2026-08-21
+
+### Fixed
+- **Removed npm from the published image.** It's a build-time tool — nothing
+  in the runtime invokes it, the entrypoint execs `node server/index.js`
+  directly — but the base image ships it anyway, and it vendors its own
+  dependency tree (`tar`, `undici`, `brace-expansion`, `ip-address`, …). A
+  scan of the previous release reported 1 critical and 6 high CVEs, every
+  one inside npm itself, none reachable and none fixable short of upstream
+  bundling a newer npm. Deleting it takes the image to zero vulnerabilities
+  at any severity. CI now asserts it stays gone.
+- Added a weekly Trivy scan (`.github/workflows/scan.yml`, HIGH/CRITICAL,
+  unfixed findings ignored) so a CVE disclosed against the published image
+  gets noticed — Dependabot only watches manifests, not what's actually
+  running.
+
 ## [0.2.11] — 2026-08-20
 
 ### Added

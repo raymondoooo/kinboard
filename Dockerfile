@@ -21,6 +21,13 @@ FROM node:22-alpine
 # drop to an unprivileged user. The compiler stays behind in the build stage.
 RUN apk add --no-cache su-exec
 
+# npm is a build-time tool and nothing in this runtime invokes it (the
+# entrypoint execs `node server/index.js` directly). It is not free to keep,
+# though — it vendors its own dependency tree, and a vulnerability scan
+# reports those CVEs against this image for as long as it sits here,
+# unfixable until upstream Node bundles a newer npm.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+
 WORKDIR /app
 
 # Stamped by CI from the git tag. Without it — a plain `docker build` — the app

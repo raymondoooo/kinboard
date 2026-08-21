@@ -28,6 +28,18 @@ jobs:
       - name: Build image
         run: docker build -t kinboard:ci .
 
+      # npm vendors its own dependency tree, so a scanner reports its CVEs
+      # against this image for as long as it sits in the runtime stage —
+      # unfixable until upstream Node bundles a newer npm. The Dockerfile
+      # deletes it; this catches a future edit that quietly reintroduces it
+      # (e.g. copying it back in from the build stage, or a stage reorder).
+      - name: Runtime image must not ship npm
+        run: |
+          if docker run --rm --entrypoint sh kinboard:ci -c 'command -v npm npx' >/dev/null 2>&1; then
+            echo "FAIL: runtime image still ships npm (it vendors CVEs and nothing here runs it)"; exit 1
+          fi
+          echo "npm is absent from the runtime image"
+
       - name: Start container on a clean volume
         run: |
           docker run -d --name kinboard-ci -p 3200:3200 \
