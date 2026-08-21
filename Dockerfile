@@ -3,7 +3,7 @@
 # binary matches the platform (notably on arm64). The toolchain that does that
 # is ~160MB of gcc and python3 — it belongs here and nowhere near the image
 # users actually run.
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 
 RUN apk add --no-cache python3 make g++
 
@@ -15,7 +15,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 # ── Runtime stage ───────────────────────────────────────────────────────────
-FROM node:22-alpine
+FROM node:26-alpine
 
 # su-exec only — it lets the entrypoint fix volume ownership as root and then
 # drop to an unprivileged user. The compiler stays behind in the build stage.
