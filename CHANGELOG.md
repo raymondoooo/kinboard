@@ -3,6 +3,19 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.2.13] — 2026-08-24
+
+### Fixed
+- **The calendar could go stale on a phone until you force-quit it.** Kinboard
+  refreshes events every 5 minutes via a background timer, but mobile
+  browsers throttle timers in a backgrounded tab — installed to the Home
+  Screen and left open for a while, that timer just doesn't fire, so new
+  events (a feed update, something a family member added) don't show up
+  until something forces a fresh load. It now also refreshes the instant the
+  tab becomes visible again, which costs nothing while backgrounded (no
+  timer, no polling — a single listener that fires once on return) and means
+  you never have to force-close the app to see current data.
+
 ## [0.2.12] — 2026-08-21
 
 ### Fixed
