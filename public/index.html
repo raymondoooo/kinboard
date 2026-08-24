@@ -4102,6 +4102,18 @@ async function init() {
       render();
     }
   }, 1000 * 60);
+
+  // Mobile browsers throttle setInterval in a backgrounded tab — installed as
+  // a Home Screen PWA and left open for hours, the 5-minute refresh above
+  // simply doesn't fire, so the calendar quietly goes stale until something
+  // else forces a reload. Catching the moment the tab becomes visible again
+  // fixes that for free: this fires once, does nothing while backgrounded,
+  // and replaces a background timer rather than adding one.
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible') return;
+    await loadEvents();
+    render();
+  });
 }
 
 (function() {
