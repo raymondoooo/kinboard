@@ -3,6 +3,24 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.2.14] — 2026-08-25
+
+### Added
+- **The phone agenda view now loads further as you scroll**, instead of
+  hard-stopping at 60 days with no way to see past it. The data was already
+  there — the server sends everything out to a year — so this only changes
+  how much of it gets rendered; scrolling near the bottom renders another
+  batch, up to a year out, matching the server's own fetch window.
+
+### Fixed
+- A stretch of many empty days (nothing scheduled for weeks) could silently
+  wedge "load more" — the browser only fires another scroll event on an
+  actual position change, and a batch of days with zero events doesn't grow
+  the page at all, so the list could get stuck well short of real events
+  sitting further out. It now keeps pulling in more days in place until
+  content actually appears (or the year-out cap is reached), so a sparse
+  calendar can't strand you partway there.
+
 ## [0.2.13] — 2026-08-24
 
 ### Fixed

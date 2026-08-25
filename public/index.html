@@ -2044,6 +2044,16 @@ let viewMode = mobileMQ.matches ? 'agenda' : 'grid';
 let weatherData = null;
 let dailyWeather = {};
 let activeFilter = null;
+
+// Agenda view (mobile) grows on scroll rather than fetching more — the server
+// already sends everything up to a year out (see the /api/events window on
+// the server), so "load more" just means rendering further into data that's
+// already sitting in `events`. Persists across re-renders (not reset inside
+// renderAgenda) so the periodic background refresh doesn't snap someone's
+// scroll position back down to 60 days while they're mid-read.
+let agendaDaysShown = 60;
+const AGENDA_PAGE_SIZE = 60;
+const AGENDA_MAX_DAYS = 365; // matches the server's fetch window
 let editMode = null;
 let detailEv = null;
 let pendingSaveController = null; // the in-flight add/edit-event request, so Cancel can actually abort it
@@ -3017,11 +3027,31 @@ function renderGrid() {
   grid.style.gridTemplateRows = `auto repeat(${weeks}, minmax(min-content, 1fr))`;
 }
 
+// The box that actually scrolls in agenda view is layout-dependent, not
+// always #agenda-container: below 700px, #content-scroll is the one real
+// scroller (see its mobile media-query rule — #agenda-container's own
+// overflow:auto is inert there because its parent is display:block, not
+// flex). Above 700px (only reachable by manually toggling the view — the
+// toggle button itself is hidden on mobile), #content-scroll is
+// display:contents and generates no box at all, so it reports 0/0 and
+// #agenda-container is the real one. Detecting this by measured overflow
+// rather than by viewport width tracks the CSS exactly instead of
+// duplicating its breakpoint in JS.
+function agendaScrollEl() {
+  const cs = document.getElementById('content-scroll');
+  return cs.scrollHeight > cs.clientHeight ? cs : document.getElementById('agenda-container');
+}
+
 function renderAgenda() {
   const grid = document.getElementById('grid');
   const container = document.getElementById('agenda-container');
   grid.style.display = 'none';
   container.style.display = 'block';
+  // A full rebuild is simplest and matches how this already worked, but it
+  // resets scrollTop to 0 — jarring mid-scroll, and would defeat "load more"
+  // entirely (every extra page would bounce back to the top). Restore it.
+  const scrollEl = agendaScrollEl();
+  const prevScrollTop = scrollEl.scrollTop;
   container.innerHTML = '';
 
   document.getElementById('prev-month').style.visibility = 'hidden';
@@ -3032,7 +3062,7 @@ function renderAgenda() {
   const today = startOfDay(new Date());
   let hasAnyEvents = false;
 
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < agendaDaysShown; i++) {
     const date = addDays(today, i);
     // eventsForDay sorts by person-then-time (grouped) for the grid cells;
     // agenda reads as a chronological timeline, so re-sort to pure time order
@@ -3092,9 +3122,18 @@ function renderAgenda() {
   if (!hasAnyEvents) {
     const empty = document.createElement('div');
     empty.className = 'agenda-empty';
-    empty.textContent = 'No upcoming events in the next 60 days.';
+    empty.textContent = `No upcoming events in the next ${agendaDaysShown} days.`;
     container.appendChild(empty);
+  } else if (agendaDaysShown >= AGENDA_MAX_DAYS) {
+    // Matches the server's own fetch window — there is genuinely nothing
+    // further to load, not just an arbitrary place this stopped rendering.
+    const end = document.createElement('div');
+    end.className = 'agenda-empty';
+    end.textContent = "That's everything within a year — nothing further out yet.";
+    container.appendChild(end);
   }
+
+  scrollEl.scrollTop = prevScrollTop;
 }
 
 function weatherEmoji(code) {
@@ -4114,6 +4153,39 @@ async function init() {
     await loadEvents();
     render();
   });
+
+  // Agenda "load more": grow the rendered window as the user nears the
+  // bottom. No fetch involved — the data's already in `events` out to a
+  // year, this just renders further into it — so it's a synchronous
+  // re-render, not a network round trip.
+  //
+  // Attached to both candidate scroll boxes (see agendaScrollEl() above) —
+  // which one actually fires depends on viewport width, and only the one
+  // that's genuinely overflowing will ever cross the threshold below, so
+  // having both listeners present is harmless.
+  let agendaLoadingMore = false;
+  function handleAgendaScroll(e) {
+    const el = e.target;
+    if (viewMode !== 'agenda' || agendaLoadingMore || agendaDaysShown >= AGENDA_MAX_DAYS) return;
+    if (el.scrollHeight <= el.clientHeight) return; // not the active scroller right now
+    if (el.scrollTop + el.clientHeight < el.scrollHeight - 600) return;
+    agendaLoadingMore = true;
+    // A page of days can render nothing at all — a sparse stretch with zero
+    // events — in which case scrollHeight doesn't grow, and a browser never
+    // fires another 'scroll' event for a scrollTop assignment that didn't
+    // actually move anything. Without this loop, "load more" would silently
+    // wedge itself the first time it crossed an empty run, even with real
+    // events sitting much further out. Keep pulling pages in-place until
+    // either real content pushes the edge away or the cap is hit.
+    while (agendaDaysShown < AGENDA_MAX_DAYS) {
+      agendaDaysShown = Math.min(AGENDA_MAX_DAYS, agendaDaysShown + AGENDA_PAGE_SIZE);
+      renderAgenda();
+      if (el.scrollTop + el.clientHeight < el.scrollHeight - 600) break;
+    }
+    agendaLoadingMore = false;
+  }
+  document.getElementById('agenda-container').addEventListener('scroll', handleAgendaScroll);
+  document.getElementById('content-scroll').addEventListener('scroll', handleAgendaScroll);
 }
 
 (function() {
