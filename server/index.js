@@ -815,7 +815,33 @@ async function fetchFeedEvents(feed, windowStart, windowEnd, memberColors = {}, 
     }
   }
 
-  feedCache.set(feed.id, { fetchedAt: Date.now(), events });
+  // A fetch that "succeeds" but comes back nearly empty is the failure mode
+  // that actually bit a household: a feed briefly returned 1 event instead of
+  // 81, that result was cached, and for the next three minutes everyone's
+  // phone showed a calendar with a family member's entire work schedule
+  // missing — then it came back on its own, which makes it look like a phone
+  // problem rather than a server one. An upstream serving a short body is not
+  // something we can prevent; overwriting known-good data with it is.
+  //
+  // Feeds do legitimately shrink (a season ends), so this can't refuse
+  // forever — after RETRIES consecutive suspect fetches the smaller result is
+  // accepted as the new truth. `fetchedAt` still advances each time, so a
+  // rejected fetch doesn't turn into a hot retry loop against the source.
+  const COLLAPSE_RETRIES = 3;
+  const prev = cached && cached.events ? cached.events.length : 0;
+  const collapsed = prev >= 5 && events.length * 2 < prev;
+  if (collapsed && (cached.suspect || 0) < COLLAPSE_RETRIES) {
+    const suspect = (cached.suspect || 0) + 1;
+    console.warn(
+      `[feeds] ${feed.name || feed.url}: returned ${events.length} events but ` +
+      `${prev} were cached — keeping the previous copy (${suspect}/${COLLAPSE_RETRIES}). ` +
+      `If the feed really did shrink, this accepts it after ${COLLAPSE_RETRIES} tries.`
+    );
+    feedCache.set(feed.id, { fetchedAt: Date.now(), events: cached.events, suspect });
+    return cached.events;
+  }
+
+  feedCache.set(feed.id, { fetchedAt: Date.now(), events, suspect: 0 });
   return events;
 }
 
