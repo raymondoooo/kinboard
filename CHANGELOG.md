@@ -3,6 +3,30 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.2.16] — 2026-09-03
+
+### Fixed
+- **Subscribed calendars kept losing most of their events for a few minutes
+  at a time, on a loop.** This is the real cause behind the "it stopped
+  showing again" reports that 0.2.15 only softened.
+
+  Three parts of the app ask for different spans of the same feed: the
+  calendar wants 13 months, the share page 180 days, and the reminder cron
+  only today and tomorrow. All three went through one cache keyed solely by
+  feed id, so whichever ran last decided what everyone got. The reminder
+  cron runs every 5 minutes and the cache holds for 3, so a feed of 81
+  events would serve its ~4-day slice — often 1 event, sometimes 0 — to
+  every device in the house, then recover on its own, then do it again.
+  A household watching a family member's work schedule saw exactly that:
+  two days of games, then nothing, then all of them back.
+
+  Feeds are now expanded once over a canonical window, cached in that one
+  shape, and narrowed to whatever the caller asked for on the way out. The
+  cron now warms the same entry the calendar reads instead of overwriting
+  it, and each caller gets a correctly filtered result — the cron was also
+  being handed a year of events on a cache hit, well outside the window it
+  asked for.
+
 ## [0.2.15] — 2026-09-03
 
 ### Fixed
