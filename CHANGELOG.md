@@ -3,6 +3,25 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.2.15] — 2026-09-03
+
+### Fixed
+- **A subscribed calendar could lose most of its events for minutes at a
+  time, then recover on its own.** If a feed's server answered a refresh
+  with a short body — a success, just missing nearly everything — Kinboard
+  cached that and served it to every device for the next three minutes.
+  Caught in the wild: a feed holding 81 events returned 1, and a family
+  member's entire work schedule vanished from the calendar until the cache
+  turned over. Because it healed itself, it read like a phone problem
+  rather than a server one.
+
+  A refresh that comes back with less than half of what was cached is now
+  treated as suspect: the previous copy is kept and the drop is logged.
+  Feeds do legitimately shrink, so this can't refuse forever — after three
+  consecutive suspect refreshes the smaller result is accepted as the new
+  truth. Cold starts are unprotected by design: with nothing cached yet
+  there's no known-good copy to compare against.
+
 ## [0.2.14] — 2026-08-25
 
 ### Added
