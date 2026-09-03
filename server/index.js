@@ -655,16 +655,53 @@ function fixRecurrence(occ, tzid) {
   return new Date(occ.getTime() + deltaMin * 60000);
 }
 
-async function fetchFeedEvents(feed, windowStart, windowEnd, memberColors = {}, personNames = [], categoryNames = []) {
+// The window a caller wants is NOT part of the cache key, and must not be:
+// three callers want three different spans of the same feed — the calendar
+// wants 13 months, the share page 180 days, and the reminder cron only today
+// and tomorrow. Caching whatever the last caller asked for meant the 5-minute
+// reminder cron kept overwriting the cache with its own ~4-day slice, and for
+// the 3 minutes until that entry expired every device in the house got that
+// slice instead of a year — a feed of 81 events serving 1, on a loop, healing
+// itself between cycles. Diagnosed from a household whose calendar kept
+// "losing" a family member's entire work schedule and then getting it back.
+//
+// So: always expand over one canonical window, cache THAT, and narrow to what
+// the caller asked for on the way out. One shape in the cache, every caller
+// served correctly, and the cron now warms the same entry the calendar reads
+// instead of poisoning it.
+function canonicalFeedWindow() {
+  const start = new Date(); start.setMonth(start.getMonth() - 1);
+  const end   = new Date(); end.setFullYear(end.getFullYear() + 1);
+  return { start, end };
+}
+
+function clipToWindow(events, windowStart, windowEnd) {
+  if (!windowStart && !windowEnd) return events;
+  const lo = windowStart ? windowStart.getTime() : -Infinity;
+  const hi = windowEnd ? windowEnd.getTime() : Infinity;
+  return events.filter((e) => {
+    const s = new Date(e.start).getTime();
+    const en = new Date(e.end || e.start).getTime();
+    if (!Number.isFinite(s) || !Number.isFinite(en)) return false;
+    return s <= hi && en >= lo;
+  });
+}
+
+async function fetchFeedEvents(feed, reqStart, reqEnd, memberColors = {}, personNames = [], categoryNames = []) {
   const cached = feedCache.get(feed.id);
-  if (cached && Date.now() - cached.fetchedAt < FEED_CACHE_TTL) return cached.events;
+  if (cached && Date.now() - cached.fetchedAt < FEED_CACHE_TTL) {
+    return clipToWindow(cached.events, reqStart, reqEnd);
+  }
+
+  // Expansion below always runs over the canonical window, never the caller's.
+  const { start: windowStart, end: windowEnd } = canonicalFeedWindow();
 
   let data;
   try {
     data = await ical.async.parseICS(await fetchIcsText(feed.url, 8000));
   } catch (err) {
     console.error(`[feeds] fetch failed ${feed.url}: ${err.message}`);
-    return cached ? cached.events : [];
+    return cached ? clipToWindow(cached.events, reqStart, reqEnd) : [];
   }
 
   const feedPerson = feed.fixed_person || '';
@@ -838,11 +875,11 @@ async function fetchFeedEvents(feed, windowStart, windowEnd, memberColors = {}, 
       `If the feed really did shrink, this accepts it after ${COLLAPSE_RETRIES} tries.`
     );
     feedCache.set(feed.id, { fetchedAt: Date.now(), events: cached.events, suspect });
-    return cached.events;
+    return clipToWindow(cached.events, reqStart, reqEnd);
   }
 
   feedCache.set(feed.id, { fetchedAt: Date.now(), events, suspect: 0 });
-  return events;
+  return clipToWindow(events, reqStart, reqEnd);
 }
 
 // A row's recurrence is EITHER a legacy pattern string (`recurring`) or an
