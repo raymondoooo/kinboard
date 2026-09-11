@@ -23,6 +23,13 @@
     --grid-line: rgba(255,255,255,0.07);
     --hairline: rgba(255,255,255,0.16);
     --accent: #3dd6e0;
+    /* Sticky list headers sit on top of scrolling content and have to hide it.
+       They can't use --bg: several themes keep the :root --bg while painting a
+       completely different gradient on <body>, so a --bg-colored bar reads as a
+       foreign block of the wrong colour (a dark-purple band across the teal
+       default theme, which is exactly what it looked like). A translucent wash
+       over a blur takes on whatever is actually behind it, in every theme. */
+    --sticky: rgba(6,22,28,0.72);
     --header-font: 1.8rem;
     --event-font: 1rem;
     --daynum-font: 1.1rem;
@@ -816,8 +823,8 @@
     letter-spacing: 0.01em;
     color: var(--muted);
     padding: 16px 4px 8px;
-    background: linear-gradient(var(--bg) 70%, transparent);
-    backdrop-filter: blur(2px);
+    background: var(--sticky);
+    backdrop-filter: blur(12px);
   }
 
   .agenda-date-header.today-header { color: var(--accent); }
@@ -889,7 +896,7 @@
      against a white base, making the overlay invisible. Force opaque colors
      on option elements so the popup is always readable regardless of OS theme. */
   :root, body { color-scheme: dark; }
-  body.light-ui { color-scheme: light; }
+  body.light-ui { color-scheme: light; --sticky: rgba(255,255,255,0.78); }
   body:not(.light-ui) select option {
     background: #1a2420;
     color: #f0f0f0;
@@ -1299,8 +1306,8 @@
     letter-spacing: 0.01em;
     color: var(--muted);
     padding: 16px 4px 8px;
-    background: linear-gradient(var(--bg) 70%, transparent);
-    backdrop-filter: blur(2px);
+    background: var(--sticky);
+    backdrop-filter: blur(12px);
   }
   .meal-day-header.today-header { color: var(--accent); }
 
@@ -1601,6 +1608,148 @@
   body.light-ui #todo-add-form input { background: #f0f0f3; border-color: #ccc; color: #1a1a1f; }
   body.light-ui .meal-item-row { color: #111; }
 
+
+  /* ==== MOBILE MONTH VIEW ====================================================
+     The desktop grid cannot work on a phone and was never made to: seven
+     text-bearing columns don't fit in 390px, so the week overflowed sideways
+     and every event chip collapsed to "8…". The old answer was to hide the
+     grid below 700px and make mobile agenda-only — which means no month at
+     all on the device this calendar is mostly read from.
+
+     This is a separate month built for the width it actually has. Dots for
+     density (you read a month at a glance, not word by word), one tapped day
+     expanded in full underneath. Deliberately its own markup: every attempt
+     to make one tree serve a 55px column and a 200px one serves neither.
+     Gated on body[data-view] rather than a width query so it can be opened
+     on a desktop too — which is also how it gets tested. */
+  #month-mobile { display: none; }
+  body[data-view="month"] #month-mobile {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+  body[data-view="month"] #grid,
+  body[data-view="month"] #agenda-container { display: none !important; }
+
+  .mm-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    padding: 6px 6px 3px;
+    flex-shrink: 0;
+  }
+  .mm-weekdays div {
+    text-align: center;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .mm-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    padding: 0 6px 8px;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--hairline);
+    /* The day list below scrolls vertically; this tells the browser the grid
+       only ever needs vertical panning, so a horizontal drag reaches the
+       swipe handler instead of being eaten as a scroll attempt. */
+    touch-action: pan-y;
+  }
+
+  .mm-day {
+    /* A fixed row height, not a share of the viewport: 1fr rows on a short
+       phone squeeze the dots out of existence, and it's the day list that
+       should absorb whatever height is left over. */
+    min-height: 46px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding-top: 5px;
+    border-radius: 10px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.12s;
+  }
+  .mm-day.other-month { opacity: 0.3; }
+  .mm-day.selected { background: var(--surface); }
+
+  .mm-num {
+    font-size: 0.88rem;
+    font-weight: 600;
+    line-height: 1;
+    width: 27px;
+    height: 27px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    font-variant-numeric: tabular-nums;
+  }
+  .mm-day.today .mm-num {
+    background: var(--accent);
+    color: #053038;
+    font-weight: 800;
+    box-shadow: 0 0 14px rgba(61,214,224,0.6);
+  }
+  .mm-day.selected:not(.today) .mm-num { box-shadow: inset 0 0 0 2px var(--accent); }
+
+  .mm-dots {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+    justify-content: center;
+    height: 7px;
+    max-width: 100%;
+  }
+  .mm-dot { width: 6px; height: 6px; border-radius: 999px; flex-shrink: 0; }
+  .mm-more {
+    font-size: 0.56rem;
+    font-weight: 800;
+    color: var(--muted);
+    line-height: 1;
+    letter-spacing: -0.03em;
+  }
+
+  .mm-daylist {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 10px 90px;
+  }
+  /* Not sticky, and deliberately unfilled: this list is one day, and which day
+     is already unmissable in the grid above. A sticky header here would need an
+     opaque bar to occlude with, and that bar is what made the screen look cut
+     in half. */
+  .mm-daylist-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    color: var(--muted);
+    padding: 14px 4px 10px;
+  }
+  .mm-daylist-header .mm-dl-today { color: var(--accent); }
+  .mm-dl-wx { font-weight: 600; white-space: nowrap; }
+  .mm-empty { padding: 16px 6px; color: var(--faint); font-size: 0.9rem; }
+
+  /* A short phone (SE, or any handset in landscape) spends so much of its
+     height on the month that the day list underneath stops being readable.
+     Tighten the grid rather than let the list collapse to one row. */
+  @media (max-height: 700px) {
+    .mm-day { min-height: 40px; gap: 3px; padding-top: 4px; }
+    .mm-num { width: 24px; height: 24px; font-size: 0.82rem; }
+    .mm-weekdays { padding: 4px 6px 2px; }
+  }
+
   @media (max-width: 700px) {
     #feed-btn { bottom: 16px; left: 16px; width: 48px; height: 48px; font-size: 1.1rem; }
 
@@ -1627,6 +1776,15 @@
       -webkit-overflow-scrolling: touch;
     }
 
+    /* Month view moves the scrolling one level in: the grid is fixed in place
+       and the expanded day underneath is what scrolls, so the month never
+       slides off the top while you're reading a day. */
+    body[data-view="month"] #content-scroll {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
     #header {
       font-size: 1.1rem;
       padding: 10px 12px;
@@ -1636,15 +1794,32 @@
 
     #header .clock { display: none; }
 
-    /* Mobile is agenda-only: hide the grid toggle and the month-nav controls
-       (agenda is a rolling list, not paged by month), and let the header flow as a
-       simple row so the theme/settings icons stop overlapping the title. */
-    #view-btn { display: none; }
+    /* The desktop grid never appears here (see #month-mobile above), but the
+       agenda/month toggle does — mobile now has two views worth switching
+       between. The toggle and Today button drop out of their desktop absolute
+       positions and flow inline, otherwise they sit on top of the title. */
+    #view-btn, #today-btn { position: static; left: auto; }
+    #view-btn { display: block; padding: 6px 9px; }
+    #today-btn { padding: 5px 10px; font-size: 0.72rem; }
+
+    /* Month is paged, so ‹ › are the whole interaction and have to be here.
+       Agenda is one rolling list with nothing to page, so they stay hidden. */
     #header .nav-btn { display: none; }
-    #today-btn { display: none; }
-    #month-label { flex: 1; text-align: left; font-size: 1.15rem; }
-    #header-right { position: static; right: auto; gap: 4px; }
+    body[data-view="month"] #header .nav-btn { display: block; padding: 0 2px; font-size: 1.5rem; }
+
+    #header { gap: 7px; padding: 9px 11px; }
+    #month-label { flex: 1; text-align: left; font-size: 1.1rem; }
+    body[data-view="month"] #month-label { text-align: center; }
+    #header-right { position: static; right: auto; gap: 2px; }
+    /* Full-size on a phone these three ate a third of the header row. */
+    #theme-btn, #settings-link { font-size: 0.95rem; padding: 4px 6px; }
+    #signout-btn, #signin-btn { font-size: 0.68rem; padding: 5px 9px; }
     #grid { display: none !important; }
+
+    /* Five people wrapped the filter bar onto two rows and cost ~90px of the
+       month's height. Smaller chips keep everyone on one or two tight lines. */
+    #filter-bar { gap: 5px; padding: 6px 10px; }
+    .filter-chip { font-size: 0.64rem; padding: 3px 9px; }
 
     /* Wrap filter chips onto multiple rows so none are hidden off-screen. */
     #filter-bar { flex-wrap: wrap; overflow-x: visible; }
@@ -1760,6 +1935,7 @@
 <div id="content-scroll">
   <div id="filter-bar" class="calendar-only"></div>
   <div id="grid" class="calendar-only"></div>
+  <div id="month-mobile" class="calendar-only"></div>
   <div id="agenda-container" class="calendar-only"></div>
 
   <div id="meals-view">
@@ -2040,7 +2216,22 @@ let events = [];
 let viewOffset = 0;     // months from the current month (only used when !todayView)
 let todayView = true;   // true = rolling "Today" view; false = a full navigated month
 const mobileMQ = window.matchMedia('(max-width: 700px)');
-let viewMode = mobileMQ.matches ? 'agenda' : 'grid';
+
+// Mobile and desktop remember their view independently: 'month' and 'grid' are
+// two different renderings of the same idea and neither is valid on the other's
+// width, so one shared preference would keep putting people in a view their
+// screen can't show.
+function initialViewMode() {
+  const mobile = mobileMQ.matches;
+  const allowed = mobile ? ['month', 'agenda'] : ['grid', 'agenda'];
+  let saved = null;
+  try { saved = localStorage.getItem(mobile ? 'kb-view-mobile' : 'kb-view-desktop'); } catch (e) {}
+  return allowed.includes(saved) ? saved : (mobile ? 'month' : 'grid');
+}
+
+let viewMode = initialViewMode();
+let mmOffset = 0;          // months from the current month, mobile month view
+let mmSelectedKey = null;  // 'YYYY-MM-DD' of the day expanded under the grid
 let weatherData = null;
 let dailyWeather = {};
 let activeFilter = null;
@@ -2906,7 +3097,29 @@ function buildFilterBar() {
 }
 
 function render() {
-  if (viewMode === 'agenda') { renderAgenda(); } else { renderGrid(); }
+  // Set first: the CSS that decides which container has a box (and therefore
+  // what agendaScrollEl() measures) keys off this attribute, so a render that
+  // reads layout must not run against the previous view's rules.
+  document.body.dataset.view = viewMode;
+  if (viewMode === 'month') renderMonthMobile();
+  else if (viewMode === 'agenda') renderAgenda();
+  else renderGrid();
+}
+
+function updateViewBtn() {
+  const b = document.getElementById('view-btn');
+  // The glyph names where the button goes, not where you are.
+  const toMonth = viewMode === 'agenda';
+  b.textContent = toMonth ? '\u229e' : '\u2630';
+  const label = toMonth
+    ? (mobileMQ.matches ? 'Month view' : 'Grid view')
+    : 'Agenda view';
+  b.title = label;
+  b.setAttribute('aria-label', label);
+}
+
+function ymd(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function renderGrid() {
@@ -3040,6 +3253,201 @@ function renderGrid() {
 function agendaScrollEl() {
   const cs = document.getElementById('content-scroll');
   return cs.scrollHeight > cs.clientHeight ? cs : document.getElementById('agenda-container');
+}
+
+// ── Mobile month view ───────────────────────────────────────────────────────
+// See the .mm-* CSS block for why this is a separate render path rather than a
+// restyled #grid. The short version: a 55px column can hold a number and a few
+// dots, and nothing else, so the layout has to be designed around that instead
+// of inheriting one designed around 200px columns.
+
+// A whole calendar month, padded out to full weeks. Deliberately NOT
+// buildGridDates(): that one has a rolling "today's week first" mode and a
+// weeks-to-show setting, both of which exist to fill a wide screen. A phone
+// month is just the month.
+function buildMonthDates(anchor) {
+  const firstDOW = (appConfig && appConfig.firstDayOfWeek) || 0;
+  const daysInMonth = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate();
+  let lead = anchor.getDay() - firstDOW;
+  if (lead < 0) lead += 7;
+  const weeks = Math.ceil((lead + daysInMonth) / 7);
+  const start = addDays(anchor, -lead);
+  const dates = [];
+  for (let i = 0; i < weeks * 7; i++) dates.push(addDays(start, i));
+  return dates;
+}
+
+// One dot per event, colored by its first assignee. Unassigned events (feeds
+// without a person, holidays) get a neutral tone rather than being dropped —
+// "something is on this day" is the whole job of the dot.
+function eventDotColor(ev) {
+  const colors = (appConfig && appConfig.colors) || {};
+  const who = (ev.people || [])[0];
+  // The neutral has to be a theme token, not a fixed value: a pale grey dot is
+  // invisible on the light themes and a dark one is invisible on the dark ones.
+  return (who && colors[who]) || 'var(--muted)';
+}
+
+function renderMonthMobile() {
+  document.getElementById('grid').style.display = 'none';
+  document.getElementById('agenda-container').style.display = 'none';
+  const host = document.getElementById('month-mobile');
+  host.innerHTML = '';
+
+  const today = startOfDay(new Date());
+  const anchor = startOfDay(new Date(today.getFullYear(), today.getMonth() + mmOffset, 1));
+
+  document.getElementById('prev-month').style.visibility = '';
+  document.getElementById('next-month').style.visibility = '';
+  document.getElementById('today-btn').style.display = mmOffset === 0 ? 'none' : 'block';
+  document.getElementById('month-label').textContent = anchor.toLocaleString(
+    'en-US',
+    anchor.getFullYear() === today.getFullYear() ? { month: 'long' } : { month: 'long', year: 'numeric' }
+  );
+
+  const dates = buildMonthDates(anchor);
+
+  // The list underneath must always describe a day that's visible above it.
+  // Navigating away from the selected day's month re-points the selection to
+  // today (when today is on screen) or the 1st.
+  if (!mmSelectedKey || !dates.some((d) => ymd(d) === mmSelectedKey)) {
+    const sameMonth = anchor.getMonth() === today.getMonth() && anchor.getFullYear() === today.getFullYear();
+    mmSelectedKey = ymd(sameMonth ? today : anchor);
+  }
+
+  const firstDOW = (appConfig && appConfig.firstDayOfWeek) || 0;
+  const head = document.createElement('div');
+  head.className = 'mm-weekdays';
+  for (let i = 0; i < 7; i++) {
+    const el = document.createElement('div');
+    el.textContent = DAY_NAMES[(firstDOW + i) % 7].slice(0, 3);
+    head.appendChild(el);
+  }
+  host.appendChild(head);
+
+  const grid = document.createElement('div');
+  grid.className = 'mm-grid';
+  const dispMonth = anchor.getMonth();
+  const dispYear = anchor.getFullYear();
+
+  // Four marks is what fits across a phone's column without turning into a
+  // smear. Past that a count reads "busy" better than more dots would, so the
+  // last slot becomes "+N" instead of a fourth dot.
+  const MAX_MARKS = 4;
+
+  for (const date of dates) {
+    const key = ymd(date);
+    const cell = document.createElement('div');
+    cell.className = 'mm-day';
+    cell.dataset.date = key;
+    if (sameDay(date, today)) cell.classList.add('today');
+    if (key === mmSelectedKey) cell.classList.add('selected');
+    if (date.getMonth() !== dispMonth || date.getFullYear() !== dispYear) cell.classList.add('other-month');
+
+    const num = document.createElement('div');
+    num.className = 'mm-num';
+    num.textContent = String(date.getDate());
+    cell.appendChild(num);
+
+    const dayEvents = eventsForDay(date);
+    const dots = document.createElement('div');
+    dots.className = 'mm-dots';
+    const overflow = dayEvents.length > MAX_MARKS;
+    const dotCount = overflow ? MAX_MARKS - 1 : dayEvents.length;
+    for (let i = 0; i < dotCount; i++) {
+      const dot = document.createElement('span');
+      dot.className = 'mm-dot';
+      dot.style.background = eventDotColor(dayEvents[i]);
+      dots.appendChild(dot);
+    }
+    if (overflow) {
+      const more = document.createElement('span');
+      more.className = 'mm-more';
+      more.textContent = '+' + (dayEvents.length - dotCount);
+      dots.appendChild(more);
+    }
+    cell.appendChild(dots);
+
+    cell.setAttribute('role', 'button');
+    cell.setAttribute('aria-label',
+      date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) +
+      (dayEvents.length ? `, ${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}` : ', no events'));
+    grid.appendChild(cell);
+  }
+  host.appendChild(grid);
+  host.appendChild(buildMonthDayList(new Date(mmSelectedKey + 'T00:00:00'), today));
+}
+
+// The expanded day under the grid. Reuses the agenda's row markup on purpose —
+// the two views should be indistinguishable below the fold, and it means one
+// set of row styles to keep working rather than two that drift apart.
+function buildMonthDayList(date, today) {
+  const wrap = document.createElement('div');
+  wrap.className = 'mm-daylist';
+
+  const header = document.createElement('div');
+  header.className = 'mm-daylist-header';
+  const label = document.createElement('span');
+  const isToday = sameDay(date, today);
+  label.textContent = date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  if (isToday) label.className = 'mm-dl-today';
+  header.appendChild(label);
+  // The grid cells have no room for weather, so it lands here instead of
+  // being dropped from the mobile view entirely.
+  const wx = dailyWeather[ymd(date)];
+  if (wx) {
+    const w = document.createElement('span');
+    w.className = 'mm-dl-wx';
+    w.textContent = `${weatherEmoji(wx.code)} ${wx.high}°`;
+    header.appendChild(w);
+  }
+  wrap.appendChild(header);
+
+  const dayEvents = eventsForDay(date).slice().sort((a, b) => {
+    if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
+    return new Date(a.start) - new Date(b.start);
+  });
+
+  if (!dayEvents.length) {
+    const empty = document.createElement('div');
+    empty.className = 'mm-empty';
+    empty.textContent = authed ? 'Nothing scheduled — tap + to add something.' : 'Nothing scheduled.';
+    wrap.appendChild(empty);
+    return wrap;
+  }
+
+  for (const ev of dayEvents) {
+    const row = document.createElement('div');
+    row.className = 'agenda-event-row';
+    row.style.cursor = 'pointer';
+
+    const dot = document.createElement('div');
+    dot.className = 'agenda-dot';
+    renderPersonBadgeRow(dot, ev.people, 24);
+
+    const timeDiv = document.createElement('div');
+    timeDiv.className = 'agenda-time';
+    timeDiv.textContent = ev.allDay ? 'All day' : formatTime(ev.start);
+
+    const titleDiv = document.createElement('div');
+    titleDiv.className = 'agenda-title';
+    titleDiv.textContent = ev.icon ? `${ev.icon} ${ev.title}` : ev.title;
+
+    row.appendChild(dot);
+    row.appendChild(timeDiv);
+    row.appendChild(titleDiv);
+
+    if (ev.people && ev.people.length) {
+      const personDiv = document.createElement('div');
+      personDiv.className = 'agenda-person';
+      personDiv.textContent = ev.people.map(withEmoji).join(', ');
+      row.appendChild(personDiv);
+    }
+
+    row.addEventListener('click', () => showEventDetail(ev));
+    wrap.appendChild(row);
+  }
+  return wrap;
 }
 
 function renderAgenda() {
@@ -3790,7 +4198,7 @@ async function init() {
 
   buildFilterBar();
   await loadEvents();
-  document.getElementById('view-btn').textContent = viewMode === 'agenda' ? '⊞' : '☰';
+  updateViewBtn();
   render();
   updateAuthUI();
   updateClock();
@@ -3804,19 +4212,29 @@ async function init() {
   const todayBtn = document.getElementById('today-btn');
 
   document.getElementById('view-btn').addEventListener('click', () => {
-    viewMode = viewMode === 'grid' ? 'agenda' : 'grid';
-    document.getElementById('view-btn').textContent = viewMode === 'agenda' ? '⊞' : '☰';
+    // Each width toggles between its own two views: month/agenda on a phone,
+    // grid/agenda on a desktop.
+    const mobile = mobileMQ.matches;
+    if (viewMode === 'agenda') viewMode = mobile ? 'month' : 'grid';
+    else viewMode = 'agenda';
+    try { localStorage.setItem(mobile ? 'kb-view-mobile' : 'kb-view-desktop', viewMode); } catch (e) {}
+    updateViewBtn();
     render();
   });
 
-  // Mobile is agenda-only — force it whenever we cross into the mobile breakpoint
-  // (the grid toggle is hidden there, so this is the only path that sets it).
-  mobileMQ.addEventListener('change', e => {
-    if (e.matches) viewMode = 'agenda';
+  // Crossing the breakpoint (rotating a tablet, resizing a window) re-reads the
+  // preference for the width we just landed on, because the view we were in may
+  // not exist over there.
+  mobileMQ.addEventListener('change', () => {
+    viewMode = initialViewMode();
+    updateViewBtn();
     render();
   });
 
   document.getElementById('prev-month').addEventListener('click', () => {
+    // The mobile month is a plain paged month with no rolling-window mode, so
+    // it steps by one every time — none of the todayView dance below applies.
+    if (viewMode === 'month') { mmOffset--; render(); return; }
     // First step back from the Today view lands on the current month in full
     // (offset 0), not the previous month.
     if (todayView) { todayView = false; viewOffset = 0; }
@@ -3824,15 +4242,65 @@ async function init() {
     render();
   });
   document.getElementById('next-month').addEventListener('click', () => {
+    if (viewMode === 'month') { mmOffset++; render(); return; }
     // First step forward from the Today view advances to next month.
     if (todayView) { todayView = false; viewOffset = 1; }
     else viewOffset++;
     render();
   });
   todayBtn.addEventListener('click', () => {
+    if (viewMode === 'month') { mmOffset = 0; mmSelectedKey = null; render(); return; }
     todayView = true; viewOffset = 0;
     render();
   });
+
+  // ---- Mobile month: pick a day, swipe to page ----
+  const monthHost = document.getElementById('month-mobile');
+  // A swipe usually ends in a click on whatever cell the finger lifted over, and
+  // paging the month AND moving the selection off one gesture is wrong. Timestamp
+  // rather than a "swallow the next click" flag: a swipe doesn't always produce a
+  // click (it can end outside the grid, or the browser can suppress it), and a
+  // flag left armed by one of those silently eats a real tap minutes later. A
+  // timestamp expires on its own.
+  let mmSwipeAt = 0;
+  const MM_SWIPE_CLICK_MS = 500;
+
+  monthHost.addEventListener('click', e => {
+    if (Date.now() - mmSwipeAt < MM_SWIPE_CLICK_MS) return;
+    const cell = e.target.closest('.mm-day');
+    if (!cell || !cell.dataset.date) return;
+    mmSelectedKey = cell.dataset.date;
+    // Tapping a leading/trailing day moves to the month it belongs to, the way
+    // every phone calendar does — otherwise the selection ring sits on a dimmed
+    // cell while the header names a different month.
+    if (cell.classList.contains('other-month')) {
+      const t = startOfDay(new Date());
+      const d = new Date(mmSelectedKey + 'T00:00:00');
+      mmOffset = (d.getFullYear() - t.getFullYear()) * 12 + (d.getMonth() - t.getMonth());
+    }
+    render();
+  });
+
+  let mmTouchX = null, mmTouchY = null;
+  monthHost.addEventListener('touchstart', e => {
+    // Only drags that start on the grid page the month; the day list under it
+    // is an ordinary vertical scroller and must keep its own gestures.
+    mmTouchX = e.target.closest('.mm-grid') ? e.touches[0].clientX : null;
+    mmTouchY = e.touches[0].clientY;
+  }, { passive: true });
+
+  monthHost.addEventListener('touchend', e => {
+    if (mmTouchX === null) return;
+    const dx = e.changedTouches[0].clientX - mmTouchX;
+    const dy = e.changedTouches[0].clientY - mmTouchY;
+    mmTouchX = null;
+    // Decisively horizontal only: 50px of travel, and clearly more sideways
+    // than down, so a slightly-slanted scroll doesn't jump a month.
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    mmSwipeAt = Date.now();
+    mmOffset += dx < 0 ? 1 : -1;
+    render();
+  }, { passive: true });
 
   // ---- Event detail popup ----
   document.getElementById('grid').addEventListener('click', e => {
@@ -3941,7 +4409,11 @@ async function init() {
   // ---- Add event form ----
   populatePersonSelect();
 
-  document.getElementById('add-btn').addEventListener('click', () => openAddForm());
+  document.getElementById('add-btn').addEventListener('click', () => {
+    // In month view the selected day is the subject of the whole screen, so
+    // that's the date the form should open on — not today.
+    openAddForm(viewMode === 'month' ? mmSelectedKey : null);
+  });
 
   document.getElementById('ae-cancel').addEventListener('click', closeAddForm);
 

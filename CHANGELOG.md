@@ -3,6 +3,38 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.3.0] — 2026-09-11
+
+### Added
+- **A real month view on phones.** Mobile had no calendar grid at all: the
+  desktop one can't fit seven text-bearing columns into 390px, so it
+  overflowed sideways and every event collapsed to "8…", and the fix at the
+  time was to hide it below 700px and make phones agenda-only. So the device
+  this calendar is mostly read from was the one device that couldn't show a
+  month.
+
+  There's now a month built for the width it actually has — the whole month
+  on one screen, coloured dots per event (four marks a day, then "+3"), and
+  the day you tap expanded in full underneath it. Swipe the grid left or
+  right to page months, or use the ‹ › arrows that are now in the header on
+  mobile. The ☰ button switches between month and agenda, and each screen
+  size remembers its own choice.
+
+  The ＋ button adds to the day you're looking at rather than always to
+  today, and the weather for that day sits in the day's header, since there
+  is no room for it in a phone-sized cell.
+
+### Fixed
+- **Sticky date headers rendered as a dark slab in most themes.** They were
+  painted with the `--bg` token, but several themes keep the default `--bg`
+  while painting a completely different gradient on the page — so the agenda
+  and meal-plan headers drew a dark purple band across the teal default
+  theme. They're now a translucent wash over a blur, which takes on whatever
+  is actually behind it.
+- The person filter chips and header buttons on a phone were sized for a
+  desktop and cost roughly a third of the screen before a single date
+  appeared.
+
 ## [0.2.17] — 2026-09-11
 
 ### Fixed
