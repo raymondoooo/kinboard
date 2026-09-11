@@ -144,6 +144,13 @@ async function update(req, res) {
   const bad = badDueDate(row);
   if (bad) return res.status(400).json({ error: bad });
 
+  // Which occurrence the client believed it was completing. Not part of the
+  // row — it's a compare-and-swap token, never stored. See the duplicate
+  // check below.
+  const claimedOccurrence = typeof req.body.occurrenceDate === 'string'
+    ? req.body.occurrenceDate.slice(0, 10)
+    : null;
+
   // Checking off a recurring to-do advances it to its next due date instead
   // of marking it permanently done — chores repeat, they don't finish.
   if (row.done === true) {
@@ -158,7 +165,29 @@ async function update(req, res) {
 
       // Already finished, or the same completion arriving twice — either way
       // there is nothing new to pay for.
-      if (existing.done || recentlyCompleted(id)) return { duplicate: true, existing };
+      if (existing.done) return { duplicate: true, existing };
+
+      // Which occurrence is this? A repeating chore that's weeks overdue has
+      // to be checked off once per missed week to catch the ledger up, and the
+      // time-based guard below refused exactly that: the second click inside a
+      // minute looked identical to a double-tap, so a household that missed
+      // three weeks could pay for one of them and silently lose the rest.
+      //
+      // The client sends the due date it was actually looking at, which
+      // separates the two cases without guessing from timing. A real catch-up
+      // click happens after the row re-renders, so it carries the NEW due date
+      // and is allowed. A double-tap, a retried request, or a second phone all
+      // fire against the date already on screen, so they carry the OLD one and
+      // are still refused. Same protection, without punishing intent.
+      if (claimedOccurrence) {
+        if (existing.recurring && existing.due_date && claimedOccurrence !== existing.due_date) {
+          return { duplicate: true, existing };
+        }
+      } else if (recentlyCompleted(id)) {
+        // No token (an older client): fall back to the time window, which is
+        // still right for everything except catching up.
+        return { duplicate: true, existing };
+      }
 
       // Record BEFORE the row mutates: a repeating chore is about to forget
       // this ever happened (done flips back to false), so the ledger is the
