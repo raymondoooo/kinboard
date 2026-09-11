@@ -3,6 +3,30 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.2.17] — 2026-09-11
+
+### Fixed
+- **Catching up on a repeating chore only ever counted once.** Miss three
+  weeks of taking the trash out, and checking it off three times paid for
+  one week — the other two taps were silently accepted and discarded. The
+  chore did stay stuck on screen until you reloaded, which made it look
+  like a refresh bug; it wasn't. Nothing was being redrawn wrong, the
+  second and third completions just weren't being recorded.
+
+  The cause was the guard that stops a double-tap from paying twice. It was
+  purely time-based — two completions of the same chore inside a minute were
+  assumed to be the same tap arriving twice — and a deliberate catch-up
+  looks identical to a double-tap under that rule. Waiting a minute between
+  clicks would have worked, which is also why refreshing appeared to help:
+  it wasn't the reload, it was the time spent doing it.
+
+  Now the browser sends the due date the row was actually showing. A
+  catch-up click happens after the row has advanced, so it carries the new
+  date and counts. A double-tap, a retried request, or a second phone all
+  fire against the date already on screen, so they carry the stale one and
+  are still refused. Same protection against paying twice, without
+  punishing a household that fell behind.
+
 ## [0.2.16] — 2026-09-03
 
 ### Fixed

@@ -3549,7 +3549,7 @@ function renderTodos() {
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.checked = t.done;
-    checkbox.addEventListener('change', () => toggleTodo(t.id, checkbox.checked));
+    checkbox.addEventListener('change', () => toggleTodo(t.id, checkbox.checked, t.due_date));
     row.appendChild(checkbox);
 
     if (t.people && t.people.length) {
@@ -3623,8 +3623,16 @@ function renderTodos() {
   }
 }
 
-async function toggleTodo(id, done) {
-  await apiFetch(`/api/todos/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ done }) });
+async function toggleTodo(id, done, occurrenceDate) {
+  // Send the due date this row was showing. The server uses it to tell a
+  // deliberate catch-up click (new date, allowed) from a double-tap or a
+  // retry (stale date, refused) — without that, checking off a chore that's
+  // several weeks overdue only ever credits one of the missed weeks.
+  await apiFetch(`/api/todos/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(occurrenceDate ? { done, occurrenceDate } : { done }),
+  });
   await loadTodos();
   renderTodos();
   // Checking a chore off is what mints points, so the balance has to move in
