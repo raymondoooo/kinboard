@@ -17,12 +17,20 @@ password, your data stays on your own disk.
 <td align="center"><em>The week's meals</em></td>
 </tr>
 <tr>
+<td width="50%"><img src="docs/screenshots/mobile-month.png" alt="Month view on a phone"></td>
 <td width="50%"><img src="docs/screenshots/mobile-agenda.png" alt="Agenda view on a phone"></td>
-<td width="50%"><img src="docs/screenshots/settings.png" alt="Settings"></td>
 </tr>
 <tr>
-<td align="center"><em>Agenda view on a phone</em></td>
+<td align="center"><em>Month view on a phone — swipe to change month, tap a day to open it</em></td>
+<td align="center"><em>…or the agenda, if a rolling list suits you better</em></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/settings.png" alt="Settings"></td>
+<td width="50%"></td>
+</tr>
+<tr>
 <td align="center"><em>Settings, including seven themes</em></td>
+<td></td>
 </tr>
 </table>
 
@@ -161,6 +169,8 @@ yours to run, and your family's schedule never leaves your machine.
 
 - Month grid / agenda views, recurring events (including custom RRULE import), drag-free
   quick add
+- A month view built for phones — the whole month as coloured dots, swipe to page,
+  tap a day to open it in full; the agenda is a tap away if you prefer a rolling list
 - Meal planner, and a combined chore/to-do list with repeats, a per-device
   "show me mine" filter, a Skip button for a repeating chore the kids missed
   (moves to the next occurrence, no payout), and **chore earnings** — give a
@@ -175,7 +185,7 @@ yours to run, and your family's schedule never leaves your machine.
 - Optional public (no-password) read-only calendar
 - Push notifications (per-device, no app install) plus an ntfy/Discord/Slack webhook fallback
 - Weather (ZIP-based, via the free Open-Meteo + Zippopotam.us APIs — no API key)
-- Seven themes, PWA-installable, mobile-friendly agenda view
+- Seven themes, PWA-installable, and designed to work on a phone rather than merely fit on one
 
 ## Support
 
