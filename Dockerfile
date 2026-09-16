@@ -3,7 +3,15 @@
 # binary matches the platform (notably on arm64). The toolchain that does that
 # is ~160MB of gcc and python3 — it belongs here and nowhere near the image
 # users actually run.
-FROM node:22-alpine AS build
+#
+# Pinned to 24, the active LTS. This sat on 22 for a long time because
+# better-sqlite3 11's native binding wouldn't survive anything newer — 24
+# segfaulted under load and 26 wouldn't build at all. better-sqlite3 13 fixed
+# that, and both were re-tested before this moved. Staying on 22 would have
+# meant running a maintenance-mode runtime until it goes EOL. 26 also works
+# now, but it is Current rather than LTS and this image ships to other
+# people's houses, so it stays on LTS.
+FROM node:24-alpine AS build
 
 RUN apk add --no-cache python3 make g++
 
@@ -15,7 +23,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 # ── Runtime stage ───────────────────────────────────────────────────────────
-FROM node:22-alpine
+FROM node:24-alpine
 
 # Patch the base image's own packages before adding anything to it. node:22-alpine
 # is rebuilt on Node's schedule, not Alpine's, so it lags security updates by days

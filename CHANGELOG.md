@@ -3,6 +3,16 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.3.2] — 2026-09-16
+
+### Changed
+- **Now runs on Node 24, the active LTS.** The image sat on Node 22 because
+  better-sqlite3 11's native binding wouldn't survive anything newer — 24
+  segfaulted under load, 26 wouldn't build at all. The move to better-sqlite3
+  13 in 0.3.1 cleared that, and staying on 22 would have meant running a
+  runtime already in maintenance. (Node 26 works too, but it's Current rather
+  than LTS, so it can wait.)
+
 ## [0.3.1] — 2026-09-16
 
 ### Security
