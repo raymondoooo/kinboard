@@ -3,6 +3,27 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.3.1] — 2026-09-16
+
+### Security
+- **The image now patches its own OS packages at build time.** `node:22-alpine`
+  is rebuilt on Node's release schedule, not Alpine's, so it lags security
+  updates by days or weeks. The weekly vulnerability scan had been failing on
+  CVE-2026-14456 (an OpenSSL denial of service) while the fixed
+  `libcrypto3`/`libssl3` 3.5.8-r0 sat unused in the Alpine repositories —
+  and rebuilding didn't help, because the stale packages are baked into the
+  base layer. The runtime stage now runs `apk upgrade`, so every release
+  picks up whatever Alpine has published rather than whatever Node last
+  happened to bundle. Trivy goes from 2 HIGH to zero.
+
+### Fixed
+- **`docker run kinboard <command>` ignored the command and started the
+  server.** The entrypoint exec'd `node server/index.js` unconditionally, so
+  any diagnostic one-liner against the image (`docker run --rm kinboard sh -c
+  '…'`) silently booted a second copy of the app and printed its log instead
+  of an answer. It now runs what you asked for, still as the unprivileged
+  `node` user, and falls back to starting the server when given no arguments.
+
 ## [0.3.0] — 2026-09-11
 
 ### Added

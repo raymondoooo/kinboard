@@ -17,9 +17,17 @@ RUN npm ci --omit=dev
 # ── Runtime stage ───────────────────────────────────────────────────────────
 FROM node:22-alpine
 
-# su-exec only — it lets the entrypoint fix volume ownership as root and then
-# drop to an unprivileged user. The compiler stays behind in the build stage.
-RUN apk add --no-cache su-exec
+# Patch the base image's own packages before adding anything to it. node:22-alpine
+# is rebuilt on Node's schedule, not Alpine's, so it lags security updates by days
+# or weeks: the weekly scan has been failing on CVE-2026-14456 (openssl) while the
+# fixed libcrypto3/libssl3 3.5.8-r0 sat in the Alpine repos unused. Rebuilding
+# alone doesn't help — the stale packages are baked into the base layer. This
+# upgrades them at build time, so every future release picks up whatever Alpine
+# has published rather than whatever Node last happened to bundle.
+#
+# su-exec lets the entrypoint fix volume ownership as root and then drop to an
+# unprivileged user. The compiler stays behind in the build stage.
+RUN apk --no-cache upgrade && apk add --no-cache su-exec
 
 # npm is a build-time tool and nothing in this runtime invokes it (the
 # entrypoint execs `node server/index.js` directly). It is not free to keep,
