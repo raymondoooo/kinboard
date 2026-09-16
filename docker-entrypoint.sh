@@ -8,4 +8,16 @@
 set -e
 mkdir -p /app/data
 chown -R node:node /app/data
-exec su-exec node node server/index.js
+
+# With no arguments, start the server — the normal case, and what
+# `docker run kinboard` / compose does. With arguments, run those instead, still
+# as the unprivileged user: `docker run --rm kinboard sh -c 'apk info -v'` or
+# `... node scripts/import.js` should do what it says rather than silently
+# ignoring the command and booting a second server. This used to exec the server
+# unconditionally, so every diagnostic one-liner against the image started the
+# app and printed its log instead of an answer.
+if [ "$#" -eq 0 ]; then
+  set -- node server/index.js
+fi
+
+exec su-exec node "$@"
