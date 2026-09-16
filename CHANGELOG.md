@@ -16,6 +16,15 @@ means the shape of things can still change between minor releases.
   picks up whatever Alpine has published rather than whatever Node last
   happened to bundle. Trivy goes from 2 HIGH to zero.
 
+### Changed
+- **better-sqlite3 11 → 13.** Two majors on the database layer, tested in a
+  container rather than taken on trust: migrations, WAL, transactions,
+  recurring expansion and the chore ledger all behave identically. It also
+  drops 25 transitive packages by replacing the `prebuild-install` tree with
+  per-platform prebuilds.
+- CI action bumps: `docker/setup-buildx-action` 3 → 4,
+  `peter-evans/dockerhub-description` 4 → 5.
+
 ### Fixed
 - **`docker run kinboard <command>` ignored the command and started the
   server.** The entrypoint exec'd `node server/index.js` unconditionally, so
