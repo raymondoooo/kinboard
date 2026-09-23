@@ -3034,12 +3034,24 @@ function eventsForDay(date) {
     // Event overlaps this day if it starts before dayEnd and ends after dayStart
     return evStart < dayEnd && evEnd > dayStart;
   }).sort((a, b) => {
-    // All-day first, then alphabetical by assigned people, then by start time
+    // All-day first, then chronological.
+    //
+    // This used to group by assignee before time — all of Abbie's day, then
+    // all of Hunter's — on the theory that it kept one person's events
+    // together. In a household with four or five people it just shuffled the
+    // day: 6PM, 8AM, 4PM, 6:30PM, 8:40AM down a single Thursday, because the
+    // times were only sorted *within* each person's block. A day cell's whole
+    // job is to say what happens when, and the person is already on the badge.
+    //
+    // The agenda, the phone month view and the share page were all
+    // chronological already; the grid was the one that wasn't.
     if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
-    const aPeople = (a.people || []).join(', ');
-    const bPeople = (b.people || []).join(', ');
-    if (aPeople !== bPeople) return aPeople.localeCompare(bPeople);
-    return new Date(a.start) - new Date(b.start);
+    const byTime = new Date(a.start) - new Date(b.start);
+    if (byTime) return byTime;
+    // Same minute: order by title so the run doesn't reshuffle between
+    // renders. Array.prototype.sort is stable, but the input isn't — events
+    // arrive from the DB, feeds and holiday generation in no fixed order.
+    return String(a.title || '').localeCompare(String(b.title || ''));
   });
 }
 

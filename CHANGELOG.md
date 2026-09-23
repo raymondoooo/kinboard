@@ -3,6 +3,22 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.3.3] — 2026-09-23
+
+### Fixed
+- **Events in a month-grid day cell were not in time order.** The grid sorted
+  by assignee first and time only second, so a busy Thursday read 6PM, 8AM,
+  4PM, 6:30PM, 8:40AM — each person's block was internally sorted, but the day
+  as a whole wasn't. With four or five people in a household that's just a
+  shuffled day, and a day cell exists to say what happens when; who it belongs
+  to is already on the badge.
+
+  Day cells are now chronological, with all-day events first and ties broken by
+  title so a run doesn't reshuffle between renders. This matches the agenda,
+  the phone month view and the share page, all of which were already sorted
+  this way — the grid was the only one that wasn't. Present since the first
+  release.
+
 ## [0.3.2] — 2026-09-16
 
 ### Changed
