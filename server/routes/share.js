@@ -133,16 +133,54 @@ function buildIcs(settings, events, feedOccs = []) {
 // The URL token IS the access grant — works even when the calendar is
 // private, since viewing via a share link is always allowed.
 
-function tokenMatches(req, settings) {
+function tokenMatches(req, settings, column = 'share_token') {
   // Tolerate a trailing ".ics" so a single route works for both the feed URL
   // (…/UUID.ics) and the plain token, regardless of Express suffix parsing.
   const token = String(req.params.token || '').replace(/\.ics$/i, '');
-  return settings.share_token && token && settings.share_token === token;
+  return !!(settings[column] && token && settings[column] === token);
 }
 
 function filenameSlug(name) {
   const slug = String(name || 'kinboard').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   return slug || 'kinboard';
+}
+
+// Build and send a .ics of native events (RRULE VEVENTs) plus live-feed
+// occurrences (expanded) — `nativeOk`/`feedOk`/`titleOk` decide what's in it.
+async function sendIcs(res, settings, { nativeOk, feedOk, titleOk, daysBack = 0 }) {
+  const tz = settings.time_zone || 'America/New_York';
+
+  const [{ data: events, error }, { data: members }, { data: feeds }] = await Promise.all([
+    db.from('events').select('*').order('date', { ascending: true }),
+    db.from('members').select('display_name, color'),
+    db.from('feeds').select('*'),
+  ]);
+  if (error) return res.status(500).send('Error');
+
+  const native = (events || []).filter(nativeOk);
+
+  // Feed occurrences within the same forward window as the web share.
+  let feedOccs = [];
+  try {
+    const { fetchFeedEvents } = require('../index');
+    const included = (feeds || []).filter(feedOk);
+    if (typeof fetchFeedEvents === 'function' && included.length) {
+      const start = tenantToday(tz);
+      const end = new Date(start); end.setDate(end.getDate() + SHARE_WINDOW_DAYS);
+      start.setDate(start.getDate() - daysBack);
+      const colors = {};
+      for (const m of members || []) { if (m.display_name) colors[m.display_name] = m.color; }
+      const personNames = (members || []).map(m => m.display_name).filter(Boolean);
+      const arrs = await Promise.all(included.map(f => fetchFeedEvents(f, start, end, colors, personNames, [])));
+      feedOccs = arrs.flat().filter(fev => titleOk(fev.title));
+    }
+  } catch (e) {
+    console.error(`[share .ics] feed merge failed: ${e.message}`);
+  }
+
+  res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+  res.setHeader('Content-Disposition', `inline; filename="${filenameSlug(settings.name)}.ics"`);
+  res.send(buildIcs(settings, native, feedOccs));
 }
 
 // GET /api/calendar/:token.ics  (webcal subscribe URL)
@@ -153,38 +191,23 @@ async function icsHandler(req, res) {
   const settings = getSettings();
   if (!tokenMatches(req, settings)) return res.status(404).send('Not found');
   const matches = makeMatcher(settings.share_keywords);
-  const tz = settings.time_zone || 'America/New_York';
+  return sendIcs(res, settings, {
+    nativeOk: ev => nativeShared(ev, matches),
+    feedOk: f => !f.never_share, // per-feed opt-out
+    titleOk: matches,
+  });
+}
 
-  const [{ data: events, error }, { data: members }, { data: feeds }] = await Promise.all([
-    db.from('events').select('*').order('date', { ascending: true }),
-    db.from('members').select('display_name, color'),
-    db.from('feeds').select('*'),
-  ]);
-  if (error) return res.status(500).send('Error');
-
-  const sharedNative = (events || []).filter(ev => nativeShared(ev, matches));
-
-  // Feed occurrences within the same window as the web share, keyword-filtered.
-  let feedOccs = [];
-  try {
-    const { fetchFeedEvents } = require('../index');
-    const shareableFeeds = (feeds || []).filter(f => !f.never_share); // per-feed opt-out
-    if (typeof fetchFeedEvents === 'function' && shareableFeeds.length) {
-      const start = tenantToday(tz);
-      const end = new Date(start); end.setDate(end.getDate() + SHARE_WINDOW_DAYS);
-      const colors = {};
-      for (const m of members || []) { if (m.display_name) colors[m.display_name] = m.color; }
-      const personNames = (members || []).map(m => m.display_name).filter(Boolean);
-      const arrs = await Promise.all(shareableFeeds.map(f => fetchFeedEvents(f, start, end, colors, personNames, [])));
-      feedOccs = arrs.flat().filter(fev => matches(fev.title));
-    }
-  } catch (e) {
-    console.error(`[share .ics] feed merge failed: ${e.message}`);
-  }
-
-  res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
-  res.setHeader('Content-Disposition', `inline; filename="${filenameSlug(settings.name)}.ics"`);
-  res.send(buildIcs(settings, sharedNative, feedOccs));
+// GET /api/calendar/all/:token.ics  (the full feed)
+// Everything on the calendar — no keyword filter, and the "never share"
+// overrides don't apply: those govern the view-only links, and this feed is for
+// the household's own apps. Its token is separate from share_token, so the
+// filtered link can't be turned into this one, and each is revoked on its own.
+// A month of past feed events is kept so a phone's recent days aren't blank.
+async function fullIcsHandler(req, res) {
+  const settings = getSettings();
+  if (!tokenMatches(req, settings, 'full_share_token')) return res.status(404).send('Not found');
+  return sendIcs(res, settings, { nativeOk: () => true, feedOk: () => true, titleOk: () => true, daysBack: 30 });
 }
 
 // GET /share/:token  (human-readable read-only page)
@@ -383,13 +406,15 @@ async function shareEventsHandler(req, res) {
 // ── Owner controls (authed) ─────────────────────────────────────────────────
 
 function shareUrls(req, settings) {
-  if (!settings.share_token) return { token: null };
   const base = `${req.protocol}://${req.get('host')}`;
-  return {
-    token: settings.share_token,
-    shareUrl: `${base}/share/${settings.share_token}`,
-    icsUrl: `${base}/api/calendar/${settings.share_token}.ics`,
-  };
+  const out = { token: null, fullIcsUrl: null };
+  if (settings.share_token) {
+    out.token = settings.share_token;
+    out.shareUrl = `${base}/share/${settings.share_token}`;
+    out.icsUrl = `${base}/api/calendar/${settings.share_token}.ics`;
+  }
+  if (settings.full_share_token) out.fullIcsUrl = `${base}/api/calendar/all/${settings.full_share_token}.ics`;
+  return out;
 }
 
 // Owner-authed — never exposed via /api/config (which viewers can read).
@@ -408,11 +433,24 @@ async function revokeShareToken(req, res) {
   res.json({ ok: true });
 }
 
+async function generateFullToken(req, res) {
+  db.raw.prepare('UPDATE settings SET full_share_token = ? WHERE id = 1').run(crypto.randomUUID());
+  res.json(shareUrls(req, getSettings()));
+}
+
+async function revokeFullToken(req, res) {
+  db.raw.prepare('UPDATE settings SET full_share_token = NULL WHERE id = 1').run();
+  res.json({ ok: true });
+}
+
 module.exports = {
   icsHandler,
+  fullIcsHandler,
   shareViewHandler,
   shareEventsHandler,
   shareStatus,
   generateShareToken,
   revokeShareToken,
+  generateFullToken,
+  revokeFullToken,
 };

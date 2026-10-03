@@ -69,7 +69,7 @@ function ensureColumn(table, column, definition) {
 // scheme report version 0 and may already have some columns from a pre-release
 // build, so schema steps go through ensureColumn rather than a bare ALTER.
 // A backup is taken before any migration runs on an existing database.
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 const MIGRATIONS = [
   {
@@ -119,6 +119,16 @@ const MIGRATIONS = [
         raw.prepare('UPDATE settings SET last_digest_date = ? WHERE id = 1').run(today);
         console.log(`[db] marked today's digest (${today}) as already sent, so upgrading doesn't repeat it`);
       }
+    },
+  },
+  {
+    version: 4,
+    describe: 'a separate token for the full (unfiltered) .ics feed',
+    up() {
+      // Its own token, not a flag on share_token: the filtered link is often
+      // handed to grandparents and sitters, and turning on the full feed must
+      // never quietly widen what that existing link shows.
+      ensureColumn('settings', 'full_share_token', 'text');
     },
   },
 ];

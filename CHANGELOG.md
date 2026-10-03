@@ -3,6 +3,17 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [Unreleased]
+
+### Added
+- **A full calendar feed, for your own apps.** Settings → Sharing now has a
+  second subscription link that carries *every* event — no share words, and
+  "Never share" doesn't apply — so the whole calendar can be subscribed into a
+  phone, Google/Apple/Outlook, or anything else that reads `.ics`. It has its
+  own secret, separate from the view-only links, so turning it on never widens
+  what the grandparents' link shows, and each is turned off on its own. Live
+  feed events are included from 30 days back to 180 days ahead.
+
 ## [0.3.3] — 2026-09-23
 
 ### Fixed

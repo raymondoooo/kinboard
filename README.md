@@ -180,6 +180,7 @@ yours to run, and your family's schedule never leaves your machine.
   from event titles
 - One-time calendar import, from a URL or an uploaded `.ics` file (migrate off a live feed —
   or a calendar you only ever got as a download — into native, editable events)
+- A full `.ics` feed of every event, with its own secret, for subscribing your own apps
 - View-only share link + a `.ics` subscription URL, with keyword-based auto-sharing so only
   what you choose leaves the household
 - Optional public (no-password) read-only calendar
