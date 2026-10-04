@@ -14,6 +14,24 @@ means the shape of things can still change between minor releases.
   what the grandparents' link shows, and each is turned off on its own. Live
   feed events are included from 30 days back to 180 days ahead.
 
+### Fixed
+- **The `.ics` feeds wrote invalid times, so strict calendar apps rejected
+  them.** An event whose time was typed in rather than imported is stored as
+  `19:30`, and the feed turned that into `DTSTART:20260813T1930` with no
+  seconds. That's not a valid iCalendar date-time, and parsers that follow the
+  spec (Homepage's calendar widget, for one) failed on the whole feed. Every
+  date in the feed now goes through one formatter, so imported and typed-in
+  events can't come out differently again.
+
+  While in there, the feed now says which time zone its times are in. They
+  used to be "floating", so each app read them in its own local zone. Times
+  are now tagged with the household's zone (with the zone's DST rules in the
+  feed), and events from subscribed calendars are written in UTC. Also fixed:
+  overnight events (7pm–1am) ended before they started; skipped dates and end
+  dates on timed repeating events were written as plain dates, which the spec
+  doesn't allow; and long lines containing emoji could be cut in the middle of
+  a character. Present since sharing was added.
+
 ## [0.3.3] — 2026-09-23
 
 ### Fixed

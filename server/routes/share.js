@@ -2,132 +2,14 @@ const crypto = require('crypto');
 const path = require('path');
 const { RRule } = require('rrule');
 const db = require('../db');
+const { buildIcs } = require('../ics');
 
 function getSettings() {
   return db.decodeRow('settings', db.raw.prepare('SELECT * FROM settings WHERE id = 1').get());
 }
 
-// ── ICS helpers ────────────────────────────────────────────────────────────
-// We emit stored events as VEVENTs INCLUDING their RRULE/EXDATE, and let the
-// subscriber's calendar app do the recurrence expansion. That's more correct
-// than pre-expanding and keeps this endpoint cheap.
-
-function icsEscape(s) {
-  return String(s == null ? '' : s)
-    .replace(/\\/g, '\\\\')
-    .replace(/;/g, '\\;')
-    .replace(/,/g, '\\,')
-    .replace(/\r?\n/g, '\\n');
-}
-
-// Fold lines to 75 octets per RFC 5545 (continuation lines start with a space).
-function fold(line) {
-  if (line.length <= 75) return line;
-  const parts = [];
-  let i = 0;
-  while (i < line.length) {
-    parts.push((i === 0 ? '' : ' ') + line.slice(i, i + (i === 0 ? 75 : 74)));
-    i += i === 0 ? 75 : 74;
-  }
-  return parts.join('\r\n');
-}
-
-function dateCompact(d) {
-  return String(d).slice(0, 10).replace(/-/g, ''); // YYYY-MM-DD → YYYYMMDD
-}
-
-function timeCompact(t) {
-  return String(t).slice(0, 8).replace(/:/g, ''); // HH:MM:SS → HHMMSS
-}
-
-const FREQ = { daily: 'DAILY', weekly: 'WEEKLY', monthly: 'MONTHLY', yearly: 'YEARLY' };
-const BYDAY = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
-
-function veventFor(ev) {
-  const lines = ['BEGIN:VEVENT', `UID:${ev.id}@kinboard`, `DTSTAMP:${dateCompact(ev.created_at)}T000000Z`];
-
-  if (ev.all_day || !ev.start_time) {
-    lines.push(`DTSTART;VALUE=DATE:${dateCompact(ev.date)}`);
-  } else {
-    // Floating local time — accepted by Google/Apple; a VTIMEZONE block is a
-    // future refinement.
-    lines.push(`DTSTART:${dateCompact(ev.date)}T${timeCompact(ev.start_time)}`);
-    if (ev.end_time) lines.push(`DTEND:${dateCompact(ev.date)}T${timeCompact(ev.end_time)}`);
-  }
-
-  lines.push(`SUMMARY:${icsEscape(ev.title)}`);
-  if (ev.location) lines.push(`LOCATION:${icsEscape(ev.location)}`);
-  if (Array.isArray(ev.people) && ev.people.length) lines.push(`DESCRIPTION:${icsEscape(ev.people.join(', '))}`);
-
-  if (ev.rrule) {
-    // Imported/custom RFC5545 rule — emit it verbatim. End date lives in
-    // ends_on (not the rule); append it as UNTIL when the rule lacks one so
-    // subscriber apps bound the series.
-    let rrule = `RRULE:${ev.rrule}`;
-    if (ev.ends_on && !/UNTIL=/i.test(ev.rrule)) rrule += `;UNTIL=${dateCompact(ev.ends_on)}T235959Z`;
-    lines.push(rrule);
-    if (Array.isArray(ev.exdates) && ev.exdates.length) {
-      lines.push(`EXDATE;VALUE=DATE:${ev.exdates.map(dateCompact).join(',')}`);
-    }
-  } else if (ev.recurring === 'monthly_dow') {
-    // "Nth weekday of the month" → RRULE BYDAY (e.g. BYDAY=3FR, or -1FR for last).
-    const d = new Date(String(ev.date).slice(0, 10) + 'T00:00:00');
-    const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-    const ord = d.getDate() + 7 > daysInMonth ? -1 : Math.ceil(d.getDate() / 7);
-    let rrule = `RRULE:FREQ=MONTHLY;BYDAY=${ord}${BYDAY[d.getDay()]}`;
-    if (ev.ends_on) rrule += `;UNTIL=${dateCompact(ev.ends_on)}`;
-    lines.push(rrule);
-    if (Array.isArray(ev.exdates) && ev.exdates.length) {
-      lines.push(`EXDATE;VALUE=DATE:${ev.exdates.map(dateCompact).join(',')}`);
-    }
-  } else if (ev.recurring && FREQ[ev.recurring]) {
-    let rrule = `RRULE:FREQ=${FREQ[ev.recurring]}`;
-    if (ev.ends_on) rrule += `;UNTIL=${dateCompact(ev.ends_on)}`;
-    lines.push(rrule);
-    if (Array.isArray(ev.exdates) && ev.exdates.length) {
-      lines.push(`EXDATE;VALUE=DATE:${ev.exdates.map(dateCompact).join(',')}`);
-    }
-  }
-
-  lines.push('END:VEVENT');
-  return lines;
-}
-
-// A single already-expanded feed occurrence → a standalone (non-recurring)
-// VEVENT with floating local time (matches how native timed events are emitted).
-function veventForFeedOcc(fev, tz) {
-  const uid = `share-${(fev.uid || 'feed')}-${String(fev.start).replace(/[^0-9]/g, '')}@kinboard`;
-  const lines = ['BEGIN:VEVENT', `UID:${uid}`, `DTSTAMP:${dateCompact(new Date().toISOString())}T000000Z`];
-  if (fev.allDay) {
-    lines.push(`DTSTART;VALUE=DATE:${dateCompact(fev.start)}`);
-  } else {
-    const s = localParts(fev.start, tz);
-    lines.push(`DTSTART:${s.date.replace(/-/g, '')}T${s.hm.replace(':', '')}00`);
-    if (fev.end) { const e = localParts(fev.end, tz); lines.push(`DTEND:${e.date.replace(/-/g, '')}T${e.hm.replace(':', '')}00`); }
-  }
-  lines.push(`SUMMARY:${icsEscape(fev.title)}`);
-  if (fev.location) lines.push(`LOCATION:${icsEscape(fev.location)}`);
-  if (Array.isArray(fev.people) && fev.people.length) lines.push(`DESCRIPTION:${icsEscape(fev.people.join(', '))}`);
-  lines.push('END:VEVENT');
-  return lines;
-}
-
-function buildIcs(settings, events, feedOccs = []) {
-  const tz = settings.time_zone || 'America/New_York';
-  const out = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//kinboard//self-hosted//EN',
-    'CALSCALE:GREGORIAN',
-    'METHOD:PUBLISH',
-    `X-WR-CALNAME:${icsEscape(settings.name)}`,
-    `X-WR-TIMEZONE:${icsEscape(tz)}`,
-  ];
-  for (const ev of events) out.push(...veventFor(ev));                        // native → RRULE VEVENTs
-  for (const fev of feedOccs || []) out.push(...veventForFeedOcc(fev, tz));    // feed → expanded VEVENTs
-  out.push('END:VCALENDAR');
-  return out.map(fold).join('\r\n') + '\r\n';
-}
+// The .ics itself is written by server/ics.js; this file decides which events
+// go in it.
 
 // ── Token resolution ────────────────────────────────────────────────────────
 // The URL token IS the access grant — works even when the calendar is
