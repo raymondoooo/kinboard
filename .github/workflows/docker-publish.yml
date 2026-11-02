@@ -508,8 +508,11 @@ jobs:
           curl -fsS -b /tmp/mj http://localhost:3300/api/events > /tmp/mev.json
           grep -q 'One off' /tmp/mev.json      || { echo "FAIL: one-off event missing"; exit 1; }
           grep -q 'Weekly thing' /tmp/mev.json || { echo "FAIL: recurring event missing"; exit 1; }
-          # The excluded date must not come back as an occurrence.
-          grep -q "${SKIP}T" /tmp/mev.json && { echo "FAIL: EXDATE was not honoured"; exit 1; }
+          # The excluded date must not come back as an occurrence. Only the
+          # series counts: the imported holidays put Thanksgiving on SKIP when
+          # this runs 24 days before it, and a plain grep failed on that.
+          python3 -c 'import json,sys; d=json.load(open("/tmp/mev.json")); L=d if isinstance(d,list) else d["events"]; sys.exit(any(e.get("title")=="Weekly thing" and str(e.get("start","")).startswith(sys.argv[1]) for e in L))' "$SKIP" \
+            || { echo "FAIL: EXDATE was not honoured"; exit 1; }
 
           # Re-importing the same export must skip, not duplicate.
           docker exec kinboard-mig node scripts/import-kinevents.js --file /tmp/import.json --data-dir /app/data --force > /tmp/imp2.log 2>&1
