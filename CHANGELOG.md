@@ -3,7 +3,7 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
-## [Unreleased]
+## [0.4.0] — 2026-11-02
 
 ### Added
 - **A full calendar feed, for your own apps.** Settings → Sharing now has a
@@ -31,6 +31,13 @@ means the shape of things can still change between minor releases.
   dates on timed repeating events were written as plain dates, which the spec
   doesn't allow; and long lines containing emoji could be cut in the middle of
   a character. Present since sharing was added.
+
+### Security
+- **Updated `proxy-addr` to 2.0.8 and `body-parser` to 2.4.0.** proxy-addr
+  2.0.7 could be fooled about a client's IP through an IPv4-mapped IPv6
+  address in a trusted subnet (CVE-2026-90711, critical); body-parser 2.3.0
+  could be crashed by a malformed compressed request body (CVE-2026-111181).
+  The published 0.3.3 image has both; update to this release.
 
 ## [0.3.3] — 2026-09-23
 
