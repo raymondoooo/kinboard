@@ -3,6 +3,42 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.4.0] — 2026-11-02
+
+### Added
+- **A full calendar feed, for your own apps.** Settings → Sharing now has a
+  second subscription link that carries *every* event — no share words, and
+  "Never share" doesn't apply — so the whole calendar can be subscribed into a
+  phone, Google/Apple/Outlook, or anything else that reads `.ics`. It has its
+  own secret, separate from the view-only links, so turning it on never widens
+  what the grandparents' link shows, and each is turned off on its own. Live
+  feed events are included from 30 days back to 180 days ahead.
+
+### Fixed
+- **The `.ics` feeds wrote invalid times, so strict calendar apps rejected
+  them.** An event whose time was typed in rather than imported is stored as
+  `19:30`, and the feed turned that into `DTSTART:20260813T1930` with no
+  seconds. That's not a valid iCalendar date-time, and parsers that follow the
+  spec (Homepage's calendar widget, for one) failed on the whole feed. Every
+  date in the feed now goes through one formatter, so imported and typed-in
+  events can't come out differently again.
+
+  While in there, the feed now says which time zone its times are in. They
+  used to be "floating", so each app read them in its own local zone. Times
+  are now tagged with the household's zone (with the zone's DST rules in the
+  feed), and events from subscribed calendars are written in UTC. Also fixed:
+  overnight events (7pm–1am) ended before they started; skipped dates and end
+  dates on timed repeating events were written as plain dates, which the spec
+  doesn't allow; and long lines containing emoji could be cut in the middle of
+  a character. Present since sharing was added.
+
+### Security
+- **Updated `proxy-addr` to 2.0.8 and `body-parser` to 2.4.0.** proxy-addr
+  2.0.7 could be fooled about a client's IP through an IPv4-mapped IPv6
+  address in a trusted subnet (CVE-2026-90711, critical); body-parser 2.3.0
+  could be crashed by a malformed compressed request body (CVE-2026-111181).
+  The published 0.3.3 image has both; update to this release.
+
 ## [0.3.3] — 2026-09-23
 
 ### Fixed

@@ -595,6 +595,22 @@
           </div>
           <button class="add-btn" id="share-revoke-btn" type="button" style="margin-top:0.75rem;">Turn off sharing</button>
         </div>
+
+        <!-- Kept apart from the links above on purpose: those are filtered and
+             meant for other people; this one is everything, for your own apps. -->
+        <hr style="border:none;border-top:1px solid var(--border);margin:1.25rem 0;" />
+        <label style="display:block;font-size:0.85rem;color:var(--muted);margin-bottom:0.25rem;">Full calendar feed</label>
+        <p class="section-sub" style="margin-bottom:0.6rem;">A subscription link with <strong>every</strong> event — no share words, and "Never share" is ignored — for your own phone, Google/Apple/Outlook, or any app that reads .ics. Anyone who gets this link can read the whole calendar, so don't hand it out. It has its own secret and turns off separately from the links above.</p>
+        <div id="full-off">
+          <button class="add-btn" id="full-generate-btn" type="button">Create full feed link</button>
+        </div>
+        <div id="full-on" style="display:none;">
+          <div class="section-actions">
+            <input id="full-ics-url" type="text" readonly style="flex:1;min-width:0;" />
+            <button class="btn btn-sm btn-ghost" type="button" style="flex:0 0 auto;width:auto;" onclick="copyShare('full-ics-url')">Copy</button>
+          </div>
+          <button class="add-btn" id="full-revoke-btn" type="button" style="margin-top:0.75rem;">Turn off full feed</button>
+        </div>
         </div>
       </details>
 
@@ -754,6 +770,10 @@
         on.style.display = 'none';
         off.style.display = '';
       }
+      const fullOn = !!(data && data.fullIcsUrl);
+      document.getElementById('full-ics-url').value = fullOn ? data.fullIcsUrl : '';
+      document.getElementById('full-on').style.display = fullOn ? '' : 'none';
+      document.getElementById('full-off').style.display = fullOn ? 'none' : '';
     }
     async function loadShareState() {
       try { renderShare(await api('GET', '/api/share/status')); } catch { /* leave default (off) */ }
@@ -764,8 +784,17 @@
     }
     async function revokeShare() {
       if (!confirm('Turn off sharing? Existing links will stop working immediately.')) return;
-      try { await api('POST', '/api/share/revoke'); renderShare({ token: null }); toast('Sharing turned off', 'ok'); }
+      try { await api('POST', '/api/share/revoke'); await loadShareState(); toast('Sharing turned off', 'ok'); }
       catch (e) { toast('Could not turn off sharing: ' + e.message, 'err'); }
+    }
+    async function generateFull() {
+      try { renderShare(await api('POST', '/api/share/full/generate')); toast('Full feed link created', 'ok'); }
+      catch (e) { toast('Could not create link: ' + e.message, 'err'); }
+    }
+    async function revokeFull() {
+      if (!confirm('Turn off the full feed? Apps subscribed to it will stop updating.')) return;
+      try { await api('POST', '/api/share/full/revoke'); await loadShareState(); toast('Full feed turned off', 'ok'); }
+      catch (e) { toast('Could not turn off the full feed: ' + e.message, 'err'); }
     }
     function copyShare(id) {
       const el = document.getElementById(id);
@@ -774,6 +803,8 @@
     }
     document.getElementById('share-generate-btn')?.addEventListener('click', generateShare);
     document.getElementById('share-revoke-btn')?.addEventListener('click', revokeShare);
+    document.getElementById('full-generate-btn')?.addEventListener('click', generateFull);
+    document.getElementById('full-revoke-btn')?.addEventListener('click', revokeFull);
 
     // ── Share keywords (auto-share by title) ──
     let shareKeywords = [];

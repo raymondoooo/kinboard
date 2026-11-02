@@ -1193,12 +1193,15 @@ app.delete('/api/events/:id', auth.requireAuth, async (req, res) => {
 // Public, token-gated (the token is the access grant — works even when the
 // calendar is private, since viewing via a share link is always allowed).
 app.get('/api/calendar/:token', rateLimit({ max: 60 }), share.icsHandler);
+app.get('/api/calendar/all/:token', rateLimit({ max: 60 }), share.fullIcsHandler);
 app.get('/share/:token', rateLimit({ max: 60 }), share.shareViewHandler);
 app.get('/api/share/:token/events', rateLimit({ max: 60 }), share.shareEventsHandler);
-// Owner controls — generate/revoke the share token.
+// Owner controls — generate/revoke the share token and the full-feed token.
 app.get('/api/share/status', auth.requireAuth, share.shareStatus);
 app.post('/api/share/generate', auth.requireAuth, share.generateShareToken);
 app.post('/api/share/revoke', auth.requireAuth, share.revokeShareToken);
+app.post('/api/share/full/generate', auth.requireAuth, share.generateFullToken);
+app.post('/api/share/full/revoke', auth.requireAuth, share.revokeFullToken);
 
 // Look up a member's color by display_name, to color a feed by its owner.
 async function memberColor(person) {
