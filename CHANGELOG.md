@@ -3,6 +3,24 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [Unreleased]
+
+### Changed
+- **Events with no end time now last an hour in calendar links.** Other apps
+  drew them as a zero-length sliver. Settings → Sharing has the length (30
+  minutes to 2 hours, or none); it only changes the `.ics` feeds, not the
+  events themselves.
+
+### Fixed
+- **Share-link secrets were written to the container log.** Every request
+  path was logged, including the secret in `/share/…` and `/api/calendar/…`
+  links, so anyone who could read `docker logs` could read the calendar. The
+  secret is now masked, and the healthcheck is no longer logged at all.
+- **Times are stored one way.** Typed-in events were saved as `19:30` and
+  imported ones as `19:30:00`; the mix is what caused the invalid `.ics` times
+  fixed in 0.4.0. Everything is now `HH:MM:SS`, and existing events are
+  converted when you upgrade.
+
 ## [0.4.0] — 2026-11-02
 
 ### Added

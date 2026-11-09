@@ -1000,6 +1000,7 @@ app.get('/api/config', requireViewAccess, async (req, res) => {
     // perfectly normal setup, so the UI must not assume a currency.
     pointValueCents: settings.point_value_cents || 0,
     currencySymbol: settings.currency_symbol || '$',
+    defaultEventMinutes: settings.default_event_minutes ?? 60,
     // Whether THIS request is logged in with the household password — drives
     // whether the client shows write controls (add/edit/delete) or read-only
     // (e.g. an anonymous visitor on a public calendar).
@@ -1646,6 +1647,10 @@ app.patch('/api/settings', auth.requireAuth, async (req, res) => {
   }
   if (typeof b.currency_symbol === 'string') {
     update.currency_symbol = b.currency_symbol.trim().slice(0, 4) || '$';
+  }
+  if (b.default_event_minutes !== undefined) {
+    const m = Math.trunc(Number(b.default_event_minutes));
+    update.default_event_minutes = Number.isFinite(m) ? Math.min(1440, Math.max(0, m)) : 60;
   }
 
   if (Array.isArray(b.share_keywords)) {

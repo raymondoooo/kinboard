@@ -110,3 +110,22 @@ test('one unwritable event is skipped, not the whole feed', () => {
   assert.match(out, /SUMMARY:Minions\/Draft/);
   assert.doesNotMatch(out, /SUMMARY:Bad/);
 });
+
+test('events with no end time get the default length in the feed', () => {
+  const evs = [
+    { id: 'noend', title: 'Pickup', date: '2026-08-13', start_time: '15:30:00', all_day: 0, created_at: '2026-08-01 12:00:00' },
+    { id: 'late', title: 'Late show', date: '2026-08-13', start_time: '23:30:00', all_day: 0, created_at: '2026-08-01 12:00:00' },
+    { id: 'zero', title: 'Zero length', date: '2026-08-13', start_time: '09:00:00', end_time: '09:00:00', all_day: 0, created_at: '2026-08-01 12:00:00' },
+    { id: 'ends', title: 'Has an end', date: '2026-08-13', start_time: '10:00:00', end_time: '10:45:00', all_day: 0, created_at: '2026-08-01 12:00:00' },
+  ];
+  const lines = s => buildIcs({ ...settings, default_event_minutes: s }, evs, []).replace(/\r\n /g, '').split('\r\n');
+
+  const withDefault = lines(60);
+  assert.ok(withDefault.includes('DTEND;TZID=America/New_York:20260813T163000'));
+  assert.ok(withDefault.includes('DTEND;TZID=America/New_York:20260814T003000'), 'crosses midnight');
+  assert.ok(withDefault.includes('DTEND;TZID=America/New_York:20260813T100000'), 'zero-length gets the default too');
+  assert.ok(withDefault.includes('DTEND;TZID=America/New_York:20260813T104500'), 'a real end is kept');
+
+  const off = lines(0);
+  assert.strictEqual(off.filter(l => l.startsWith('DTEND')).length, 1, 'only the event with a real end has DTEND');
+});

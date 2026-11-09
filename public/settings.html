@@ -578,6 +578,18 @@
         </div>
         <p class="hint" id="kw-suggest" style="margin-top:0.5rem;"></p>
 
+        <div class="field" style="margin-top:1rem;">
+          <label for="set-default-len" style="display:block;font-size:0.85rem;color:var(--muted);margin-bottom:0.25rem;">Events with no end time</label>
+          <p class="section-sub" style="margin-bottom:0.5rem;">How long they last in the calendar links below, so Google/Apple/Outlook don't draw them as a thin sliver. Doesn't change the events themselves.</p>
+          <select id="set-default-len" style="max-width:14rem;">
+            <option value="0">No length (start time only)</option>
+            <option value="30">30 minutes</option>
+            <option value="60">1 hour</option>
+            <option value="90">1½ hours</option>
+            <option value="120">2 hours</option>
+          </select>
+        </div>
+
         <hr style="border:none;border-top:1px solid var(--border);margin:1.25rem 0;" />
         <div id="share-off">
           <button class="add-btn" id="share-generate-btn" type="button">Create share links</button>
@@ -1021,6 +1033,7 @@
           // Stored as integer cents so a point is never worth 0.30000000000000004.
           point_value_cents: Math.round((parseFloat(document.getElementById('set-point-value').value) || 0) * 100),
           currency_symbol: document.getElementById('set-currency').value.trim() || '$',
+          default_event_minutes: parseInt(document.getElementById('set-default-len').value, 10),
         };
         const res = await api('PATCH', '/api/settings', body);
         wasPublic = body.is_public;
@@ -1716,6 +1729,14 @@
       document.getElementById('set-point-value').value =
         config.pointValueCents ? (config.pointValueCents / 100).toFixed(2) : '';
       document.getElementById('set-currency').value = config.currencySymbol || '$';
+      {
+        // A value set through the API may not be one of the listed choices;
+        // show it rather than silently snapping to the nearest option.
+        const sel = document.getElementById('set-default-len');
+        const v = String(config.defaultEventMinutes ?? 60);
+        if (![...sel.options].some(o => o.value === v)) sel.add(new Option(`${v} minutes`, v));
+        sel.value = v;
+      }
       // Reflect the theme actually in effect (the 🎨 button on the calendar sets
       // localStorage only) so saving a settings change doesn't clobber a
       // locally-chosen theme back to the account default.

@@ -69,7 +69,7 @@ function ensureColumn(table, column, definition) {
 // scheme report version 0 and may already have some columns from a pre-release
 // build, so schema steps go through ensureColumn rather than a bare ALTER.
 // A backup is taken before any migration runs on an existing database.
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 const MIGRATIONS = [
   {
@@ -142,6 +142,15 @@ const MIGRATIONS = [
         const n = db.prepare(`UPDATE events SET ${col} = ${col} || ':00' WHERE length(${col}) = 5`).run().changes;
         if (n) console.log(`[db] padded ${n} events.${col} values to HH:MM:SS`);
       }
+    },
+  },
+  {
+    version: 6,
+    describe: 'a default length for events with no end time',
+    up() {
+      // Feeds wrote these as zero-length, which other calendar apps draw as a
+      // sliver. 60 minutes is what most apps assume for a new event.
+      ensureColumn('settings', 'default_event_minutes', 'integer not null default 60');
     },
   },
 ];

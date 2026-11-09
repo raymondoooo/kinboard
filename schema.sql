@@ -36,7 +36,8 @@ create table if not exists settings (
   is_public          integer not null default 0,          -- read-only public calendar?
   share_token        text,                                 -- secret for read-only share page + .ics feed
   share_keywords     text not null default '[]',          -- JSON array of title keywords that auto-share
-  full_share_token   text,                                 -- secret for the unfiltered .ics feed (every event)
+  full_share_token   text,
+  default_event_minutes integer not null default 60,      -- length given to events with no end time in .ics feeds; 0 = none                                 -- secret for the unfiltered .ics feed (every event)
   point_value_cents  integer not null default 0,          -- what one chore point is worth; 0 = points only, no money
   currency_symbol    text not null default '$',
   last_digest_date   text,                                -- household-local YYYY-MM-DD the digest last went out
