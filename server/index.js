@@ -16,7 +16,7 @@ const share = require('./routes/share');
 const meals = require('./routes/meals');
 const todos = require('./routes/todos');
 const { geocodeZip } = require('./geocode');
-const { THEMES, HEX_RE, cleanEmoji, isValidDate, isValidTime } = require('./validate');
+const { THEMES, HEX_RE, cleanEmoji, isValidDate, isValidTime, toHms } = require('./validate');
 const { dbError } = require('./respond');
 
 // What version is actually running. CI stamps KINBOARD_VERSION from the git tag
@@ -913,8 +913,8 @@ function toRow(body) {
   if (body.title !== undefined) row.title = body.title;
   if (body.date !== undefined) row.date = body.date;
   if (body.allDay !== undefined) row.all_day = body.allDay;
-  if (body.startTime !== undefined) row.start_time = body.startTime || null;
-  if (body.endTime !== undefined) row.end_time = body.endTime || null;
+  if (body.startTime !== undefined) row.start_time = toHms(body.startTime) || null;
+  if (body.endTime !== undefined) row.end_time = toHms(body.endTime) || null;
   // An end time at or before the start time (same-day event, no multi-day timed
   // events supported) makes the event fail eventsForDay()'s overlap check on
   // EVERY day — it silently stops rendering anywhere, not just on its own date.

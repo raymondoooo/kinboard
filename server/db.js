@@ -69,7 +69,7 @@ function ensureColumn(table, column, definition) {
 // scheme report version 0 and may already have some columns from a pre-release
 // build, so schema steps go through ensureColumn rather than a bare ALTER.
 // A backup is taken before any migration runs on an existing database.
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 const MIGRATIONS = [
   {
@@ -129,6 +129,19 @@ const MIGRATIONS = [
       // handed to grandparents and sitters, and turning on the full feed must
       // never quietly widen what that existing link shows.
       ensureColumn('settings', 'full_share_token', 'text');
+    },
+  },
+  {
+    version: 5,
+    describe: 'store every event time as HH:MM:SS',
+    up(db) {
+      // Typed-in events were saved as "19:30", imported ones as "19:30:00".
+      // New saves are normalized (validate.js toHms); this brings old rows
+      // in line so nothing has to cope with both shapes again.
+      for (const col of ['start_time', 'end_time']) {
+        const n = db.prepare(`UPDATE events SET ${col} = ${col} || ':00' WHERE length(${col}) = 5`).run().changes;
+        if (n) console.log(`[db] padded ${n} events.${col} values to HH:MM:SS`);
+      }
     },
   },
 ];
