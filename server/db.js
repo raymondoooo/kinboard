@@ -396,14 +396,18 @@ class QueryBuilder {
       const table = this.table;
       if (this.mode === 'insert') {
         const ids = [];
-        for (const row of this.insertRows) {
-          const withId = row.id ? row : { ...row, id: crypto.randomUUID() };
-          ids.push(withId.id);
-          const encoded = encodeRow(table, withId);
-          const cols = Object.keys(encoded);
-          const sql = `INSERT INTO ${table} (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`;
-          raw.prepare(sql).run(...cols.map((c) => encoded[c]));
-        }
+        // One transaction for the whole array: inserting several rows is all
+        // or nothing, never a partial batch left behind by a failure halfway.
+        raw.transaction(() => {
+          for (const row of this.insertRows) {
+            const withId = row.id ? row : { ...row, id: crypto.randomUUID() };
+            ids.push(withId.id);
+            const encoded = encodeRow(table, withId);
+            const cols = Object.keys(encoded);
+            const sql = `INSERT INTO ${table} (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`;
+            raw.prepare(sql).run(...cols.map((c) => encoded[c]));
+          }
+        })();
         if (!this.returning) return { data: null, error: null };
         const placeholders = ids.map(() => '?').join(',');
         const rows = raw.prepare(`SELECT * FROM ${table} WHERE id IN (${placeholders})`).all(...ids);

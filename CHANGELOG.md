@@ -5,6 +5,18 @@ means the shape of things can still change between minor releases.
 
 ## [Unreleased]
 
+### Added
+- **The same event on several days.** The add-event form has an "Also on"
+  field: add the other days and one save creates a copy on each, with one
+  notification for the lot. For a run of appointments no repeat rule
+  describes — physio on the 14th, 19th, 21st… Each copy is its own event
+  afterwards. The API takes `"dates": [...]` the same way.
+- **Duplicate.** An event's details now have a Duplicate button that opens
+  the add form already filled in.
+- **API keys.** Settings → API keys creates keys for scripts and other apps
+  (a dashboard, an automation) to read and add events without the household
+  password. See the README.
+
 ### Changed
 - **Events with no end time now last an hour in calendar links.** Other apps
   drew them as a zero-length sliver. Settings → Sharing has the length (30

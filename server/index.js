@@ -1070,29 +1070,46 @@ app.get('/api/events', requireViewAccess, async (req, res) => {
 });
 
 // Create an event (must be logged in).
+// `dates` (an array) instead of `date` adds the same event on each of those
+// days — a run of appointments that no repeat rule describes. They're
+// separate events afterwards, edited and deleted one at a time.
+const MAX_EVENT_DATES = 60;
+
 app.post('/api/events', auth.requireAuth, async (req, res) => {
-  if (!req.body.title || !req.body.date) {
+  const dates = Array.isArray(req.body.dates)
+    ? [...new Set(req.body.dates)].sort()
+    : (req.body.date ? [req.body.date] : []);
+  if (!req.body.title || !dates.length) {
     return res.status(400).json({ error: 'title and date are required' });
   }
-  const row = toRow(req.body);
-  const invalid = validateEventRow(row);
-  if (invalid) return res.status(400).json({ error: invalid });
+  if (dates.length > MAX_EVENT_DATES) {
+    return res.status(400).json({ error: `at most ${MAX_EVENT_DATES} dates at once` });
+  }
+  const row = toRow({ ...req.body, date: dates[0] });
+  for (const date of dates) {
+    const invalid = validateEventRow({ ...row, date });
+    if (invalid) return res.status(400).json({ error: invalid });
+  }
   if (row.all_day === undefined) row.all_day = true;
   if (row.rrule) {
     if (!isValidRrule(row.rrule)) return res.status(400).json({ error: 'Invalid recurrence rule' });
     row.recurring = null; // rrule and legacy recurring are mutually exclusive
   }
 
-  const { data, error } = await db.from('events').insert(row).select().single();
+  // One insert of every row: all of the dates are added, or none are.
+  const { data, error } = await db.from('events').insert(dates.map(date => ({ ...row, date }))).select();
   if (error) return res.status(500).json({ error: error.message });
+  const created = data.sort((a, b) => a.date.localeCompare(b.date));
 
-  // Notify devices watching the assigned people. Deliberately not awaited: a
-  // slow or failing push service must not delay (or fail) event creation.
-  // `deviceId` comes from the creating client so it doesn't buzz itself.
-  notify.notifyEventAdded(data, req.body.deviceId || null)
+  // Notify devices watching the assigned people — once for the batch.
+  // Deliberately not awaited: a slow or failing push service must not delay
+  // (or fail) event creation. `deviceId` comes from the creating client so it
+  // doesn't buzz itself.
+  notify.notifyEventAdded(created[0], req.body.deviceId || null, created.length - 1)
     .catch((err) => console.error('[notify] on-add dispatch:', err.message));
 
-  res.json({ ok: true, event: toClientEvent(data) });
+  const events = created.map(toClientEvent);
+  res.json({ ok: true, event: events[0], ...(Array.isArray(req.body.dates) ? { events } : {}) });
 });
 
 // Update an event (must be logged in).

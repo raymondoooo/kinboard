@@ -420,7 +420,9 @@ async function checkDueReminders() {
 // ── Trigger 3: an event was added for someone ───────────────────────────────
 // Called inline from POST /api/events. originDeviceId is the device that made
 // the request, so the phone that just created the event doesn't buzz itself.
-async function notifyEventAdded(eventRow, originDeviceId) {
+// `moreDates` > 0 when the same event was added on several days at once: one
+// notification for the batch, not one buzz per date.
+async function notifyEventAdded(eventRow, originDeviceId, moreDates = 0) {
   try {
     const people = eventRow.people || [];
     const subs = allSubscriptions().filter(
@@ -436,7 +438,8 @@ async function notifyEventAdded(eventRow, originDeviceId) {
 
     const sent = await push.sendToMany(subs, {
       title: `New event for ${who}`,
-      body: `${eventRow.title}\n${dateLabel} · ${timeLabel(occ)}`,
+      body: `${eventRow.title}\n${dateLabel} · ${timeLabel(occ)}` +
+        (moreDates > 0 ? ` (+${moreDates} more date${moreDates === 1 ? '' : 's'})` : ''),
       url: '/',
       tag: `added-${eventRow.id}`,
     });
