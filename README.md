@@ -58,6 +58,10 @@ version you're actually running, either way.
 
 Also on GHCR as `ghcr.io/raymondoooo/kinboard`. To build from a checkout instead, see
 [`docker-compose.dev.yml`](docker-compose.dev.yml).
+If you run a build from a checkout as your real calendar, deploy with
+[`scripts/deploy.sh`](scripts/deploy.sh): it only builds a clean `main` that
+matches GitHub, waits for the container to be healthy, and checks it's running
+the version you expect.
 
 Open `http://localhost:3200` (or whatever host you're running this on) and follow the
 one-time setup screen: pick a calendar name and time zone, and choose the household
