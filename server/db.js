@@ -69,7 +69,7 @@ function ensureColumn(table, column, definition) {
 // scheme report version 0 and may already have some columns from a pre-release
 // build, so schema steps go through ensureColumn rather than a bare ALTER.
 // A backup is taken before any migration runs on an existing database.
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 const MIGRATIONS = [
   {
@@ -152,6 +152,11 @@ const MIGRATIONS = [
       // sliver. 60 minutes is what most apps assume for a new event.
       ensureColumn('settings', 'default_event_minutes', 'integer not null default 60');
     },
+  },
+  {
+    version: 7,
+    describe: 'API keys',
+    up() { /* api_keys is created by schema.sql (create table if not exists) */ },
   },
 ];
 

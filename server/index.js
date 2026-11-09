@@ -151,7 +151,11 @@ app.get('/api/health', (req, res) => {
 app.post('/api/setup', rateLimit({ max: 10, windowMs: 5 * 60 * 1000 }), auth.setupHandler);
 app.post('/api/login', rateLimit({ max: 10, windowMs: 5 * 60 * 1000 }), auth.loginHandler);
 app.post('/api/logout', auth.logoutHandler);
-app.post('/api/account/password', auth.requireAuth, auth.changePasswordHandler);
+app.post('/api/account/password', auth.requireSession, auth.changePasswordHandler);
+// API keys — managed only from a password session, used as `Authorization: Bearer kb_…`.
+app.get('/api/keys', auth.requireSession, auth.listKeys);
+app.post('/api/keys', auth.requireSession, auth.createKey);
+app.delete('/api/keys/:id', auth.requireSession, auth.revokeKey);
 
 // ── Pages ──
 app.get('/setup', (req, res) => {

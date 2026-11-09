@@ -1,5 +1,6 @@
 // One shared household password — no per-member accounts, no magic links, no
-// mail server. A session is a signed, expiring cookie: value =
+// mail server. Scripts and other apps use an API key instead (see the end of
+// this file). A session is a signed, expiring cookie: value =
 // "<expiresAtMs>.<hmac>", HMAC'd with a secret generated once on setup and
 // stored on the household row. No server-side session store is needed since
 // there's only ever one credential to invalidate (change the password).
@@ -76,13 +77,30 @@ function issueSessionCookie(res, household) {
 function attachAuth(req, res, next) {
   const household = getHousehold();
   req.setupDone = !!household;
-  req.authed = req.setupDone && verifySessionCookie(household.session_secret, req.cookies?.[COOKIE_NAME]);
+  req.apiKeyId = null;
+  const bearer = /^Bearer\s+(\S+)$/i.exec(req.get('authorization') || '');
+  if (req.setupDone && bearer) {
+    // A request that presents a key is judged on the key alone.
+    req.apiKeyId = apiKeyIdFor(bearer[1]);
+    req.authed = !!req.apiKeyId;
+  } else {
+    req.authed = req.setupDone && verifySessionCookie(household.session_secret, req.cookies?.[COOKIE_NAME]);
+  }
   next();
 }
 
 function requireAuth(req, res, next) {
   if (!req.setupDone) return res.status(503).json({ error: 'Setup required', setupRequired: true });
   if (!req.authed) return res.status(401).json({ error: 'Authentication required' });
+  next();
+}
+
+// For things only a person signed in with the password may do — creating and
+// revoking API keys. Otherwise one leaked key could mint itself replacements
+// and outlive being revoked.
+function requireSession(req, res, next) {
+  if (!req.setupDone) return res.status(503).json({ error: 'Setup required', setupRequired: true });
+  if (!req.authed || req.apiKeyId) return res.status(401).json({ error: 'Sign in with the household password to manage API keys' });
   next();
 }
 
@@ -144,10 +162,61 @@ async function changePasswordHandler(req, res) {
   res.json({ ok: true });
 }
 
+// ── API keys ────────────────────────────────────────────────────────────────
+// "kb_" + 32 random bytes. Keys are long and random, so a plain SHA-256 is the
+// right hash: it's fast enough to check on every request, and there's nothing
+// to brute-force the way there is with a password.
+const KEY_PREFIX = 'kb_';
+
+function hashKey(key) {
+  return crypto.createHash('sha256').update(key).digest('hex');
+}
+
+function apiKeyIdFor(key) {
+  if (!key.startsWith(KEY_PREFIX) || key.length > 200) return null;
+  const row = db.raw.prepare('SELECT id, last_used_at FROM api_keys WHERE key_hash = ?').get(hashKey(key));
+  if (!row) return null;
+  // "Last used" is for spotting a key nobody needs any more, so minute-level is
+  // plenty — don't write to the database on every request.
+  const now = new Date();
+  if (!row.last_used_at || now - new Date(row.last_used_at) > 60_000) {
+    db.raw.prepare('UPDATE api_keys SET last_used_at = ? WHERE id = ?').run(now.toISOString(), row.id);
+  }
+  return row.id;
+}
+
+function listKeys(req, res) {
+  res.json(db.raw.prepare('SELECT id, name, prefix, created_at, last_used_at FROM api_keys ORDER BY created_at').all());
+}
+
+function createKey(req, res) {
+  const name = String((req.body && req.body.name) || '').trim().slice(0, 60);
+  if (!name) return res.status(400).json({ error: 'Give the key a name, e.g. what it is for' });
+  if (db.raw.prepare('SELECT count(*) n FROM api_keys').get().n >= 50) {
+    return res.status(400).json({ error: 'Too many API keys — revoke some you no longer use' });
+  }
+  const key = KEY_PREFIX + crypto.randomBytes(32).toString('base64url');
+  const id = crypto.randomUUID();
+  db.raw.prepare('INSERT INTO api_keys (id, name, key_hash, prefix) VALUES (?, ?, ?, ?)')
+    .run(id, name, hashKey(key), key.slice(0, 7));
+  // The only time the key itself ever leaves the server.
+  res.json({ id, name, key });
+}
+
+function revokeKey(req, res) {
+  const { changes } = db.raw.prepare('DELETE FROM api_keys WHERE id = ?').run(String(req.params.id));
+  if (!changes) return res.status(404).json({ error: 'No such key' });
+  res.json({ ok: true });
+}
+
 module.exports = {
   isSetUp,
   attachAuth,
   requireAuth,
+  requireSession,
+  listKeys,
+  createKey,
+  revokeKey,
   setupHandler,
   loginHandler,
   logoutHandler,

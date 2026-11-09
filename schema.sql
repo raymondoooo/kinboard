@@ -166,3 +166,15 @@ create table if not exists push_config (
 create index if not exists events_date_idx on events (date);
 create index if not exists meals_date_idx on meals (date);
 create index if not exists todos_due_date_idx on todos (due_date);
+
+-- API keys: a way for scripts and other apps (a dashboard, an automation) to
+-- use the API without the household password. Only a SHA-256 of each key is
+-- stored; the key itself is shown once, when it's created.
+create table if not exists api_keys (
+  id            text primary key,
+  name          text not null,                          -- what it's for, e.g. "Homepage"
+  key_hash      text not null unique,                   -- sha256 hex of the full key
+  prefix        text not null,                          -- first characters, to tell keys apart in the list
+  created_at    text not null default (datetime('now')),
+  last_used_at  text
+);

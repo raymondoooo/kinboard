@@ -159,6 +159,29 @@ JSON endpoint. This is per-household rather than per-person, but it needs no HTT
 browser permissions — the simplest option if you just want your phone to buzz. ntfy in
 particular has free iOS and Android apps, so you get real phone notifications without TLS.
 
+## API keys (scripts and other apps)
+
+Anything the web app does goes through a JSON API, and a script or another app
+(a dashboard, Home Assistant, a cron job) can use it with an API key instead of
+the household password. Create one under **Settings → API keys** — it's shown
+once, so copy it then — and send it as a bearer token:
+
+```sh
+# Add an event
+curl -X POST https://kinboard.example/api/events \
+  -H "Authorization: Bearer kb_…" -H "Content-Type: application/json" \
+  -d '{"title":"Abbie PT","date":"2026-10-14","allDay":false,
+       "startTime":"15:30","people":["Abbie"],"location":"TheraSport"}'
+
+# Read events (a month back to a year ahead, repeats expanded)
+curl https://kinboard.example/api/events -H "Authorization: Bearer kb_…"
+```
+
+To put the same event on several days, send `"dates": ["2026-10-19", "2026-10-21"]`
+instead of `"date"`. A key can do everything the password can except create or
+revoke keys and change the password. Give each app its own key, and revoke it
+in Settings when you stop using it; the list shows when each was last used.
+
 ## What's different from a multi-tenant SaaS
 
 This is single-household and single-container by design: no sign-up flow, no billing, no
@@ -181,6 +204,7 @@ yours to run, and your family's schedule never leaves your machine.
 - One-time calendar import, from a URL or an uploaded `.ics` file (migrate off a live feed —
   or a calendar you only ever got as a download — into native, editable events)
 - A full `.ics` feed of every event, with its own secret, for subscribing your own apps
+- API keys, so scripts and other apps can read and add events without the password
 - View-only share link + a `.ics` subscription URL, with keyword-based auto-sharing so only
   what you choose leaves the household
 - Optional public (no-password) read-only calendar
