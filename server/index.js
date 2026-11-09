@@ -86,8 +86,18 @@ app.use((req, res, next) => {
   express.json({ limit: '256kb' })(req, res, next);
 });
 app.use(cookieParser());
+// Request log. Share and feed URLs carry their access secret in the path, and
+// anyone who can read `docker logs` must not be able to lift it from there, so
+// it's masked. The healthcheck polls every few seconds and is left out
+// entirely — it was most of the log and said nothing.
+function logPath(p) {
+  return p
+    .replace(/^(\/api\/calendar\/(?:all\/)?)[^/]+/, '$1<token>')
+    .replace(/^(\/share\/)[^/]+/, '$1<token>')
+    .replace(/^(\/api\/share\/)(?!status$|generate$|revoke$|full\/)[^/]+/, '$1<token>');
+}
 app.use((req, res, next) => {
-  console.log(`${req.method} ${req.path}`);
+  if (req.path !== '/api/health') console.log(`${req.method} ${logPath(req.path)}`);
   next();
 });
 app.use(auth.attachAuth);
@@ -1848,7 +1858,7 @@ app.use((err, req, res, next) => {
   // a real error goes unnoticed. Client errors get one quiet line; only actual
   // server faults get the stack.
   if (status && status >= 400 && status < 500) {
-    console.warn(`[bad-request] ${req.method} ${req.path}: ${err.message}`);
+    console.warn(`[bad-request] ${req.method} ${logPath(req.path)}: ${err.message}`);
     if (res.headersSent) return;
     if (status === 400 && err.type === 'entity.parse.failed') {
       return res.status(400).json({ error: 'Malformed JSON body' });
@@ -1857,7 +1867,7 @@ app.use((err, req, res, next) => {
     return res.status(status).json({ error: 'Bad request' });
   }
 
-  console.error(`[error] ${req.method} ${req.path}:`, (err && err.stack) || err);
+  console.error(`[error] ${req.method} ${logPath(req.path)}:`, (err && err.stack) || err);
   if (res.headersSent) return;
   res.status(500).json({ error: 'Something went wrong. Check the server logs.' });
 });
