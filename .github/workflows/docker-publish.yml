@@ -28,6 +28,13 @@ jobs:
       - name: Build image
         run: docker build -t kinboard:ci .
 
+      # The unit tests (test/*.test.js) need nothing installed, so they run in
+      # the image just built — on exactly the Node that ships.
+      - name: Unit tests
+        run: |
+          docker run --rm -v "$PWD/test:/app/test:ro" --entrypoint node kinboard:ci \
+            --test "test/**/*.test.js"
+
       # npm vendors its own dependency tree, so a scanner reports its CVEs
       # against this image for as long as it sits in the runtime stage —
       # unfixable until upstream Node bundles a newer npm. The Dockerfile
@@ -227,6 +234,118 @@ jobs:
             -H 'Content-Type: application/json' -d '{"title":')
           [ "$code" = "400" ] || { echo "FAIL: malformed JSON returned $code, expected 400"; exit 1; }
           echo "missing rows and bad bodies answer 4xx"
+
+      # Strict iCalendar parsers (Homepage's widget, Python icalendar) reject a
+      # whole feed over one bad value. 0.4.0 fixed times written as T1930; this
+      # keeps both feeds parseable, with every shape of event in them.
+      - name: The .ics feeds must parse strictly
+        run: |
+          set -e
+          B=http://localhost:3200
+          J='Content-Type: application/json'
+          # Reuse the session from earlier steps: the rate-limit step above has
+          # used up this IP's logins for the next five minutes.
+          D1=$(date -u -d '+3 days' +%F); D2=$(date -u -d '+5 days' +%F); D3=$(date -u -d '+8 days' +%F)
+          curl -fsS -b /tmp/j -X PATCH "$B/api/settings" -H "$J" -d '{"share_keywords":["Game"]}' >/dev/null
+          # Typed-in HH:MM with an end, no end, an all-day, a weekly series, and
+          # one event on three days at once.
+          curl -fsS -b /tmp/j -X POST "$B/api/events" -H "$J" \
+            -d "{\"title\":\"Game night\",\"date\":\"$D1\",\"allDay\":false,\"startTime\":\"19:30\",\"endTime\":\"23:00\"}" >/dev/null
+          curl -fsS -b /tmp/j -X POST "$B/api/events" -H "$J" \
+            -d "{\"title\":\"Pickup ⚽ with a title long enough that the line has to fold somewhere\",\"date\":\"$D1\",\"allDay\":false,\"startTime\":\"15:05\"}" >/dev/null
+          curl -fsS -b /tmp/j -X POST "$B/api/events" -H "$J" \
+            -d "{\"title\":\"Field trip\",\"date\":\"$D2\",\"allDay\":true}" >/dev/null
+          curl -fsS -b /tmp/j -X POST "$B/api/events" -H "$J" \
+            -d "{\"title\":\"Practice\",\"date\":\"$D1\",\"allDay\":false,\"startTime\":\"17:30\",\"endTime\":\"19:00\",\"repeat\":\"weekly\",\"endsOn\":\"$(date -u -d '+60 days' +%F)\"}" >/dev/null
+          out=$(curl -fsS -b /tmp/j -X POST "$B/api/events" -H "$J" \
+            -d "{\"title\":\"PT\",\"dates\":[\"$D1\",\"$D2\",\"$D3\"],\"allDay\":false,\"startTime\":\"16:00\"}")
+          n=$(echo "$out" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["events"]))')
+          [ "$n" = 3 ] || { echo "FAIL: dates[] created $n events, expected 3"; exit 1; }
+
+          SHARE=$(curl -fsS -b /tmp/j -X POST "$B/api/share/generate" | python3 -c 'import json,sys; print(json.load(sys.stdin)["icsUrl"])')
+          FULL=$(curl -fsS -b /tmp/j -X POST "$B/api/share/full/generate" | python3 -c 'import json,sys; print(json.load(sys.stdin)["fullIcsUrl"])')
+          curl -fsS "$SHARE" -o /tmp/share.ics
+          curl -fsS "$FULL" -o /tmp/full.ics
+          echo "$SHARE" "$FULL" > /tmp/feed-urls
+
+          python3 -m pip install -q icalendar
+          python3 - /tmp/share.ics /tmp/full.ics <<'EOF'
+          import re, sys
+          from datetime import datetime
+          from icalendar import Calendar
+          VALID = re.compile(r"^\d{8}(T\d{6}Z?)?$")
+          for path in sys.argv[1:]:
+              raw = open(path, "rb").read()
+              text = raw.decode("utf-8")
+              lines = re.sub(r"\r\n[ \t]", "", text).split("\r\n")
+              bad = [l for l in lines if re.match(r"^(DTSTART|DTEND|EXDATE|RECURRENCE-ID)[;:]", l)
+                     and not all(VALID.match(v) for v in l.split(":", 1)[1].split(","))]
+              long = [l for l in text.split("\r\n") if len(l.encode()) > 75]
+              events = Calendar.from_ical(raw).walk("VEVENT")
+              for ev in events:
+                  start = ev["DTSTART"].dt
+                  if isinstance(start, datetime) and start.tzinfo is None:
+                      bad.append(f"floating time: {ev['SUMMARY']}")
+                  if "DTEND" in ev and ev["DTEND"].dt <= start:
+                      bad.append(f"DTEND not after DTSTART: {ev['SUMMARY']}")
+              if bad or long or not events:
+                  print(f"FAIL {path}: {len(events)} events, {len(long)} long lines"); [print("  ", b) for b in bad[:10]]
+                  sys.exit(1)
+              print(f"{path}: {len(events)} events parse strictly")
+          EOF
+          # The filtered feed carries only what matches a share word.
+          grep -q 'SUMMARY:Game night' /tmp/share.ics && ! grep -q 'SUMMARY:Practice' /tmp/share.ics \
+            || { echo "FAIL: filtered feed isn't filtered"; exit 1; }
+          # No end time → the default hour (15:05 → 16:05).
+          grep -q 'DTEND;TZID=America/New_York:[0-9]*T160500' /tmp/full.ics \
+            || { echo "FAIL: event with no end time didn't get the default length"; exit 1; }
+
+      - name: Share-link secrets must not reach the logs
+        run: |
+          set -e
+          for url in $(cat /tmp/feed-urls); do
+            token=$(basename "$url" .ics)
+            curl -fsS "http://localhost:3200/share/$token" >/dev/null 2>&1 || true
+            if docker logs kinboard-ci 2>&1 | grep -qF "$token"; then
+              echo "FAIL: a share token appears in the container log"; exit 1
+            fi
+          done
+          docker logs kinboard-ci 2>&1 | grep -q '/api/calendar/<token>' \
+            || { echo "FAIL: masked feed requests aren't logged at all"; exit 1; }
+          if docker logs kinboard-ci 2>&1 | grep -q 'GET /api/health'; then
+            echo "FAIL: healthcheck is still logged"; exit 1
+          fi
+          echo "tokens are masked"
+
+      - name: API keys work, and can't manage keys
+        run: |
+          set -e
+          B=http://localhost:3200
+          J='Content-Type: application/json'
+          created=$(curl -fsS -b /tmp/j -X POST "$B/api/keys" -H "$J" -d '{"name":"CI script"}')
+          KEY=$(echo "$created" | python3 -c 'import json,sys; print(json.load(sys.stdin)["key"])')
+          KID=$(echo "$created" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+          case "$KEY" in kb_*) ;; *) echo "FAIL: unexpected key shape"; exit 1 ;; esac
+          # The list never shows the key itself.
+          ! curl -fsS -b /tmp/j "$B/api/keys" | grep -qF "$KEY" || { echo "FAIL: key listed in full"; exit 1; }
+
+          A="Authorization: Bearer $KEY"
+          curl -fsS -H "$A" -X POST "$B/api/events" -H "$J" \
+            -d '{"title":"From a script","date":"2030-02-02","allDay":true}' | grep -q '"ok":true'
+          curl -fsS -H "$A" "$B/api/events" | grep -q 'From a script'
+
+          code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+          [ "$(code -H "$A" -X POST "$B/api/keys" -H "$J" -d '{"name":"self-made"}')" = 401 ] \
+            || { echo "FAIL: a key could create another key"; exit 1; }
+          [ "$(code -H "$A" -X POST "$B/api/account/password" -H "$J" -d '{"currentPassword":"x","newPassword":"yyyyyyyy"}')" = 401 ] \
+            || { echo "FAIL: a key reached the password change"; exit 1; }
+          # A bad key fails even alongside a valid session cookie.
+          [ "$(code -b /tmp/j -H 'Authorization: Bearer kb_nope' "$B/api/events")" = 401 ] \
+            || { echo "FAIL: bad key accepted"; exit 1; }
+
+          curl -fsS -b /tmp/j -X DELETE "$B/api/keys/$KID" >/dev/null
+          [ "$(code -H "$A" "$B/api/events")" = 401 ] || { echo "FAIL: revoked key still works"; exit 1; }
+          echo "API keys OK"
 
       - name: Page structure must be intact
         run: |
