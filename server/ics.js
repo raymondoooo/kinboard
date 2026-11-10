@@ -237,7 +237,7 @@ function rruleFor(ev, timed, tz) {
 
 // A stored (native) event → VEVENT with its RRULE/EXDATE; the subscriber's app
 // expands the recurrence.
-function veventFor(ev, tz) {
+function veventFor(ev, tz, defaultMinutes = 0) {
   const timed = !ev.all_day && !!ev.start_time;
   const lines = ['BEGIN:VEVENT', `UID:${ev.id}@kinboard`, dateProp('DTSTAMP', { instant: ev.updated_at || ev.created_at || new Date() })];
 
@@ -245,12 +245,20 @@ function veventFor(ev, tz) {
     lines.push(dateProp('DTSTART', { date: ev.date }));
   } else {
     lines.push(dateProp('DTSTART', { date: ev.date, time: ev.start_time, tz }));
-    if (ev.end_time) {
-      const s = fmtTime(ev.start_time), e = fmtTime(ev.end_time);
-      // An end at or before the start is an overnight event (7pm–1am): it ends
-      // the next day. Equal times are a zero-length event: no DTEND at all.
-      if (e !== s) lines.push(dateProp('DTEND', { date: e < s ? addDay(ev.date) : ev.date, time: ev.end_time, tz }));
+    const s = fmtTime(ev.start_time), e = ev.end_time ? fmtTime(ev.end_time) : null;
+    if (e && e !== s) {
+      // An end before the start is an overnight event (7pm–1am): it ends the
+      // next day.
+      lines.push(dateProp('DTEND', { date: e < s ? addDay(ev.date) : ev.date, time: ev.end_time, tz }));
+    } else if (defaultMinutes > 0) {
+      // No end (or an end equal to the start): other apps would show a
+      // zero-length sliver, so give it the household's default length.
+      const total = +s.slice(0, 2) * 60 + +s.slice(2, 4) + defaultMinutes;
+      const hm = total % 1440;
+      const time = `${String(Math.floor(hm / 60)).padStart(2, '0')}:${String(hm % 60).padStart(2, '0')}:${s.slice(4, 6)}`;
+      lines.push(dateProp('DTEND', { date: total >= 1440 ? addDay(ev.date) : ev.date, time, tz }));
     }
+    // Otherwise no DTEND at all: a timed DTSTART alone is a zero-length event.
   }
 
   lines.push(`SUMMARY:${icsEscape(ev.title)}`);
@@ -296,6 +304,7 @@ function safe(fn, what) {
 
 function buildIcs(settings, events, feedOccs = [], now = new Date()) {
   const tz = settings.time_zone || DEFAULT_TZ;
+  const defaultMinutes = Math.min(1440, Math.max(0, Math.trunc(+settings.default_event_minutes || 0)));
   const out = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -314,7 +323,7 @@ function buildIcs(settings, events, feedOccs = [], now = new Date()) {
     out.push(...vtimezone(tz, Math.min(...years, now.getUTCFullYear()) - 1, now.getUTCFullYear() + 2));
   }
 
-  for (const ev of events || []) out.push(...safe(() => veventFor(ev, tz), `event ${ev.id}`));
+  for (const ev of events || []) out.push(...safe(() => veventFor(ev, tz, defaultMinutes), `event ${ev.id}`));
   for (const fev of feedOccs || []) out.push(...safe(() => veventForFeedOcc(fev), `feed event ${fev.uid}`));
   out.push('END:VCALENDAR');
   return out.map(fold).join('\r\n') + '\r\n';

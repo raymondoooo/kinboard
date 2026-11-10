@@ -16,7 +16,7 @@ const share = require('./routes/share');
 const meals = require('./routes/meals');
 const todos = require('./routes/todos');
 const { geocodeZip } = require('./geocode');
-const { THEMES, HEX_RE, cleanEmoji, isValidDate, isValidTime } = require('./validate');
+const { THEMES, HEX_RE, cleanEmoji, isValidDate, isValidTime, toHms } = require('./validate');
 const { dbError } = require('./respond');
 
 // What version is actually running. CI stamps KINBOARD_VERSION from the git tag
@@ -86,8 +86,18 @@ app.use((req, res, next) => {
   express.json({ limit: '256kb' })(req, res, next);
 });
 app.use(cookieParser());
+// Request log. Share and feed URLs carry their access secret in the path, and
+// anyone who can read `docker logs` must not be able to lift it from there, so
+// it's masked. The healthcheck polls every few seconds and is left out
+// entirely — it was most of the log and said nothing.
+function logPath(p) {
+  return p
+    .replace(/^(\/api\/calendar\/(?:all\/)?)[^/]+/, '$1<token>')
+    .replace(/^(\/share\/)[^/]+/, '$1<token>')
+    .replace(/^(\/api\/share\/)(?!status$|generate$|revoke$|full\/)[^/]+/, '$1<token>');
+}
 app.use((req, res, next) => {
-  console.log(`${req.method} ${req.path}`);
+  if (req.path !== '/api/health') console.log(`${req.method} ${logPath(req.path)}`);
   next();
 });
 app.use(auth.attachAuth);
@@ -141,7 +151,11 @@ app.get('/api/health', (req, res) => {
 app.post('/api/setup', rateLimit({ max: 10, windowMs: 5 * 60 * 1000 }), auth.setupHandler);
 app.post('/api/login', rateLimit({ max: 10, windowMs: 5 * 60 * 1000 }), auth.loginHandler);
 app.post('/api/logout', auth.logoutHandler);
-app.post('/api/account/password', auth.requireAuth, auth.changePasswordHandler);
+app.post('/api/account/password', auth.requireSession, auth.changePasswordHandler);
+// API keys — managed only from a password session, used as `Authorization: Bearer kb_…`.
+app.get('/api/keys', auth.requireSession, auth.listKeys);
+app.post('/api/keys', auth.requireSession, auth.createKey);
+app.delete('/api/keys/:id', auth.requireSession, auth.revokeKey);
 
 // ── Pages ──
 app.get('/setup', (req, res) => {
@@ -903,8 +917,8 @@ function toRow(body) {
   if (body.title !== undefined) row.title = body.title;
   if (body.date !== undefined) row.date = body.date;
   if (body.allDay !== undefined) row.all_day = body.allDay;
-  if (body.startTime !== undefined) row.start_time = body.startTime || null;
-  if (body.endTime !== undefined) row.end_time = body.endTime || null;
+  if (body.startTime !== undefined) row.start_time = toHms(body.startTime) || null;
+  if (body.endTime !== undefined) row.end_time = toHms(body.endTime) || null;
   // An end time at or before the start time (same-day event, no multi-day timed
   // events supported) makes the event fail eventsForDay()'s overlap check on
   // EVERY day — it silently stops rendering anywhere, not just on its own date.
@@ -990,6 +1004,7 @@ app.get('/api/config', requireViewAccess, async (req, res) => {
     // perfectly normal setup, so the UI must not assume a currency.
     pointValueCents: settings.point_value_cents || 0,
     currencySymbol: settings.currency_symbol || '$',
+    defaultEventMinutes: settings.default_event_minutes ?? 60,
     // Whether THIS request is logged in with the household password — drives
     // whether the client shows write controls (add/edit/delete) or read-only
     // (e.g. an anonymous visitor on a public calendar).
@@ -1055,29 +1070,46 @@ app.get('/api/events', requireViewAccess, async (req, res) => {
 });
 
 // Create an event (must be logged in).
+// `dates` (an array) instead of `date` adds the same event on each of those
+// days — a run of appointments that no repeat rule describes. They're
+// separate events afterwards, edited and deleted one at a time.
+const MAX_EVENT_DATES = 60;
+
 app.post('/api/events', auth.requireAuth, async (req, res) => {
-  if (!req.body.title || !req.body.date) {
+  const dates = Array.isArray(req.body.dates)
+    ? [...new Set(req.body.dates)].sort()
+    : (req.body.date ? [req.body.date] : []);
+  if (!req.body.title || !dates.length) {
     return res.status(400).json({ error: 'title and date are required' });
   }
-  const row = toRow(req.body);
-  const invalid = validateEventRow(row);
-  if (invalid) return res.status(400).json({ error: invalid });
+  if (dates.length > MAX_EVENT_DATES) {
+    return res.status(400).json({ error: `at most ${MAX_EVENT_DATES} dates at once` });
+  }
+  const row = toRow({ ...req.body, date: dates[0] });
+  for (const date of dates) {
+    const invalid = validateEventRow({ ...row, date });
+    if (invalid) return res.status(400).json({ error: invalid });
+  }
   if (row.all_day === undefined) row.all_day = true;
   if (row.rrule) {
     if (!isValidRrule(row.rrule)) return res.status(400).json({ error: 'Invalid recurrence rule' });
     row.recurring = null; // rrule and legacy recurring are mutually exclusive
   }
 
-  const { data, error } = await db.from('events').insert(row).select().single();
+  // One insert of every row: all of the dates are added, or none are.
+  const { data, error } = await db.from('events').insert(dates.map(date => ({ ...row, date }))).select();
   if (error) return res.status(500).json({ error: error.message });
+  const created = data.sort((a, b) => a.date.localeCompare(b.date));
 
-  // Notify devices watching the assigned people. Deliberately not awaited: a
-  // slow or failing push service must not delay (or fail) event creation.
-  // `deviceId` comes from the creating client so it doesn't buzz itself.
-  notify.notifyEventAdded(data, req.body.deviceId || null)
+  // Notify devices watching the assigned people — once for the batch.
+  // Deliberately not awaited: a slow or failing push service must not delay
+  // (or fail) event creation. `deviceId` comes from the creating client so it
+  // doesn't buzz itself.
+  notify.notifyEventAdded(created[0], req.body.deviceId || null, created.length - 1)
     .catch((err) => console.error('[notify] on-add dispatch:', err.message));
 
-  res.json({ ok: true, event: toClientEvent(data) });
+  const events = created.map(toClientEvent);
+  res.json({ ok: true, event: events[0], ...(Array.isArray(req.body.dates) ? { events } : {}) });
 });
 
 // Update an event (must be logged in).
@@ -1637,6 +1669,10 @@ app.patch('/api/settings', auth.requireAuth, async (req, res) => {
   if (typeof b.currency_symbol === 'string') {
     update.currency_symbol = b.currency_symbol.trim().slice(0, 4) || '$';
   }
+  if (b.default_event_minutes !== undefined) {
+    const m = Math.trunc(Number(b.default_event_minutes));
+    update.default_event_minutes = Number.isFinite(m) ? Math.min(1440, Math.max(0, m)) : 60;
+  }
 
   if (Array.isArray(b.share_keywords)) {
     // Normalize: trim, drop blanks, lowercase-dedupe, cap length + count.
@@ -1848,7 +1884,7 @@ app.use((err, req, res, next) => {
   // a real error goes unnoticed. Client errors get one quiet line; only actual
   // server faults get the stack.
   if (status && status >= 400 && status < 500) {
-    console.warn(`[bad-request] ${req.method} ${req.path}: ${err.message}`);
+    console.warn(`[bad-request] ${req.method} ${logPath(req.path)}: ${err.message}`);
     if (res.headersSent) return;
     if (status === 400 && err.type === 'entity.parse.failed') {
       return res.status(400).json({ error: 'Malformed JSON body' });
@@ -1857,7 +1893,7 @@ app.use((err, req, res, next) => {
     return res.status(status).json({ error: 'Bad request' });
   }
 
-  console.error(`[error] ${req.method} ${req.path}:`, (err && err.stack) || err);
+  console.error(`[error] ${req.method} ${logPath(req.path)}:`, (err && err.stack) || err);
   if (res.headersSent) return;
   res.status(500).json({ error: 'Something went wrong. Check the server logs.' });
 });

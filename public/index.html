@@ -513,6 +513,35 @@
     min-height: 44px;
   }
   #detail-edit:hover { background: rgba(61,214,224,0.28); }
+  /* Same look as Edit, a step quieter. */
+  #detail-duplicate {
+    display: none;
+    width: 100%;
+    margin-top: 8px;
+    padding: 11px;
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid rgba(61,214,224,0.4);
+    border-radius: 5px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 44px;
+  }
+  #detail-duplicate:hover { background: rgba(61,214,224,0.12); }
+  .ae-more-add { display: flex; gap: 8px; }
+  .ae-more-add input { flex: 1; min-width: 0; }
+  .ae-more-add button { flex: 0 0 auto; width: auto; }
+  .ae-date-chip {
+    border: 1px solid var(--border, rgba(255,255,255,0.2));
+    background: transparent;
+    color: inherit;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    min-height: 32px;
+  }
 
   #detail-delete-recurring {
     gap: 8px;
@@ -2001,6 +2030,7 @@
     </div>
     <div id="detail-location"></div>
     <button id="detail-edit">Edit Event</button>
+    <button id="detail-duplicate">Duplicate</button>
     <button id="detail-delete">Delete Event</button>
     <div id="detail-delete-recurring" style="display:none">
       <button id="detail-delete-one">Delete This Only</button>
@@ -2176,6 +2206,17 @@
         <input id="ae-ends-on" type="date" />
       </div>
 
+      <!-- A run of appointments no repeat rule describes (PT on the 14th, 19th,
+           21st…): the same event added on each day, as separate events. -->
+      <div id="ae-more-row" style="display:none">
+        <label for="ae-more-date">Also on <span style="opacity:0.5;font-weight:400">(optional — adds a separate copy on each day)</span></label>
+        <div class="ae-more-add">
+          <input id="ae-more-date" type="date" />
+          <button type="button" id="ae-more-add">Add day</button>
+        </div>
+        <div class="person-chip-row" id="ae-more-chips"></div>
+      </div>
+
       <p id="ae-repeat-hint" class="ae-hint" style="display:none">
         Repeat changes save to <strong>All Events</strong> in the series, not just this one.
       </p>
@@ -2248,6 +2289,7 @@ const AGENDA_MAX_DAYS = 365; // matches the server's fetch window
 let editMode = null;
 let detailEv = null;
 let pendingSaveController = null; // the in-flight add/edit-event request, so Cancel can actually abort it
+let aeMoreDates = [];    // extra days for a new event ("Also on"), YYYY-MM-DD
 let aePeople = [];       // people currently selected in the add/edit event form's chip row
 let detailPeople = [];   // people currently selected in the detail popup's edit-mode chip row
 let authed = false; // set from /api/config's `authed` field and by login/logout
@@ -2458,6 +2500,7 @@ function showEventDetail(ev) {
   document.getElementById('detail-meta').textContent = meta;
   const canEdit = authed && !ev.feedId;
   document.getElementById('detail-edit').style.display = canEdit ? 'block' : 'none';
+  document.getElementById('detail-duplicate').style.display = canEdit ? 'block' : 'none';
   const personSpan = document.getElementById('detail-person');
   const personChips = document.getElementById('detail-person-chips');
   renderPersonBadgeRow(document.getElementById('detail-dot'), ev.people, 24);
@@ -2633,7 +2676,60 @@ function updateRepeatUI() {
   const v = document.getElementById('ae-repeat').value;
   document.getElementById('ae-custom-row').style.display = v === 'custom' ? '' : 'none';
   document.getElementById('ae-ends-row').style.display = v !== 'none' ? '' : 'none';
+  document.getElementById('ae-more-row').style.display = (!editMode && v === 'none') ? '' : 'none';
   if (v === 'custom') updateCustomUnitUI();
+}
+
+function renderMoreDates() {
+  const wrap = document.getElementById('ae-more-chips');
+  wrap.textContent = '';
+  for (const d of aeMoreDates) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'ae-date-chip';
+    chip.title = 'Remove this day';
+    chip.textContent = new Date(d + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) + ' ✕';
+    chip.addEventListener('click', () => { aeMoreDates = aeMoreDates.filter(x => x !== d); renderMoreDates(); });
+    wrap.appendChild(chip);
+  }
+}
+
+function addMoreDate() {
+  const input = document.getElementById('ae-more-date');
+  const d = input.value;
+  if (!d) return;
+  if (d !== document.getElementById('ae-date').value && !aeMoreDates.includes(d)) {
+    aeMoreDates = [...aeMoreDates, d].sort();
+    renderMoreDates();
+  }
+  input.value = '';
+  input.focus();
+}
+
+// The add form, filled in from an existing event: same title, time, people,
+// location and sharing, on the same day, not repeating. Change the date (or
+// add more under "Also on") and save.
+function openDuplicateForm(ev) {
+  openAddForm((ev.start || '').slice(0, 10));
+  const allDay = ev.allDay === true || ev.allDay === 'true';
+  document.getElementById('ae-heading').textContent = 'Duplicate Event';
+  document.getElementById('ae-title').value = ev.title || '';
+  document.getElementById('ae-allday').checked = allDay;
+  document.getElementById('ae-times').style.display = allDay ? 'none' : '';
+  if (!allDay) {
+    const sp = tzParts(ev.start);
+    document.getElementById('ae-date').value = sp.date;
+    document.getElementById('ae-start').value = sp.time;
+    document.getElementById('ae-end').value = (ev.end && ev.end !== ev.start) ? tzParts(ev.end).time : '';
+  }
+  refreshDowOption();
+  document.getElementById('ae-location').value = ev.location || '';
+  aePeople = Array.isArray(ev.people) ? [...ev.people] : [];
+  populatePersonSelect();
+  document.getElementById('ae-share').value =
+    (ev.shareOverride === 'always' || ev.shareOverride === 'never') ? ev.shareOverride : 'auto';
+  updateShareHint();
+  setTimeout(() => document.getElementById('ae-date').focus(), 60);
 }
 function updateCustomUnitUI() {
   const unit = document.getElementById('ae-custom-unit').value;
@@ -2676,6 +2772,9 @@ function openAddForm(dateStr) {
   document.getElementById('ae-custom-interval').value = '1';
   document.getElementById('ae-custom-unit').value = 'week';
   renderWeekdayChips([]);
+  aeMoreDates = [];
+  renderMoreDates();
+  document.getElementById('ae-more-date').value = '';
   updateRepeatUI();
   document.getElementById('ae-repeat-hint').style.display = 'none';
   document.getElementById('ae-repeat-locked').style.display = 'none';
@@ -2877,9 +2976,12 @@ async function doSave(scope) {
     if (!editMode) {
       // deviceId lets the server skip push-notifying the very device that
       // created this event (see server/notify.js notifyEventAdded).
+      // "Also on" days go in one request, so they're added together or not at all.
+      const extra = d.repeat == null && d.rrule == null ? aeMoreDates.filter(x => x !== d.date) : [];
+      const body = extra.length ? { ...d, dates: [d.date, ...extra] } : d;
       res = await apiFetch('/api/events', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...d, deviceId: kbDeviceId() }), signal: controller.signal
+        body: JSON.stringify({ ...body, deviceId: kbDeviceId() }), signal: controller.signal
       });
     } else {
       const qs = scope === 'one' ? `?instanceStart=${encodeURIComponent(editMode.instanceStart)}` : '';
@@ -4458,6 +4560,16 @@ async function init() {
     const ev = detailEv;
     closeDetailPopup();
     if (ev) openEditForm(ev);
+  });
+  document.getElementById('detail-duplicate').addEventListener('click', () => {
+    const ev = detailEv;
+    closeDetailPopup();
+    if (ev) openDuplicateForm(ev);
+  });
+  document.getElementById('ae-more-add').addEventListener('click', addMoreDate);
+  document.getElementById('ae-more-date').addEventListener('keydown', e => {
+    // Enter adds the day rather than submitting the whole form.
+    if (e.key === 'Enter') { e.preventDefault(); addMoreDate(); }
   });
 
   // ---- Feed management ----

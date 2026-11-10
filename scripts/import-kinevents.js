@@ -44,6 +44,7 @@ if (!FILE) {
 
 process.env.DATA_DIR = DATA_DIR;
 const db = require('../server/db');
+const { toHms } = require('../server/validate');
 const raw = db.raw;
 
 const src = JSON.parse(fs.readFileSync(FILE, 'utf8'));
@@ -201,7 +202,7 @@ const run = raw.transaction(() => {
       (id, title, date, start_time, end_time, all_day, people, location, recurring,
        ends_on, exdates, rrule, share_override, created_at, updated_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .run(e.id, txt(e.title), txt(e.date), txt(e.start_time), txt(e.end_time),
+      .run(e.id, txt(e.title), txt(e.date), toHms(txt(e.start_time)), toHms(txt(e.end_time)),
            bool(e.all_day), jsonArr(e.people), txt(e.location), txt(e.recurring),
            txt(e.ends_on), jsonArr(e.exdates), txt(e.rrule), txt(e.share_override),
            txt(e.created_at) || new Date().toISOString(),

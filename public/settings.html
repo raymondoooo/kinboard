@@ -407,11 +407,32 @@
         </div>
       </details>
 
+      <!-- API keys: for scripts and other apps. Managed only from a password
+           session (the server refuses key-authenticated requests here). -->
+      <details class="card" data-sec="api-keys">
+        <summary class="card-head"><h2>API keys</h2></summary>
+        <div class="card-body">
+        <p class="section-sub">Let a script or another app (a dashboard, an automation) read and add events without the household password. Send the key as <code>Authorization: Bearer &lt;key&gt;</code>. A key can do anything the password can except manage keys or change the password, so give each app its own and revoke it when you stop using it.</p>
+        <div id="api-keys-list"></div>
+        <div class="section-actions" style="margin-top:0.75rem;">
+          <input id="api-key-name" type="text" maxlength="60" placeholder="What it's for, e.g. Homepage" style="flex:1;min-width:0;" />
+          <button class="btn btn-sm btn-ghost" id="api-key-create" type="button" style="flex:0 0 auto;width:auto;">Create key</button>
+        </div>
+        <div id="api-key-new" style="display:none;margin-top:0.75rem;">
+          <label style="display:block;font-size:0.85rem;color:var(--muted);margin-bottom:0.25rem;">New key — copy it now, it won't be shown again</label>
+          <div class="section-actions">
+            <input id="api-key-value" type="text" readonly style="flex:1;min-width:0;font-family:ui-monospace,monospace;" />
+            <button class="btn btn-sm btn-ghost" type="button" style="flex:0 0 auto;width:auto;" onclick="copyShare('api-key-value')">Copy</button>
+          </div>
+        </div>
+        </div>
+      </details>
+
       <!-- Account -->
       <details class="card" data-sec="household-password">
         <summary class="card-head"><h2>Household password</h2></summary>
         <div class="card-body">
-        <p class="section-sub">Everyone who knows this password can view and edit the calendar. Changing it signs out every other device.</p>
+        <p class="section-sub">Everyone who knows this password can view and edit the calendar. Changing it signs out every other device. API keys keep working — revoke any you don't trust under <strong>API keys</strong>.</p>
         <div class="field">
           <label>Current password</label>
           <input type="password" id="pw-current" autocomplete="current-password" />
@@ -577,6 +598,18 @@
           <button class="btn btn-sm btn-ghost" id="kw-add" type="button" style="flex:0 0 auto;width:auto;">Add</button>
         </div>
         <p class="hint" id="kw-suggest" style="margin-top:0.5rem;"></p>
+
+        <div class="field" style="margin-top:1rem;">
+          <label for="set-default-len" style="display:block;font-size:0.85rem;color:var(--muted);margin-bottom:0.25rem;">Events with no end time</label>
+          <p class="section-sub" style="margin-bottom:0.5rem;">How long they last in the calendar links below, so Google/Apple/Outlook don't draw them as a thin sliver. Doesn't change the events themselves.</p>
+          <select id="set-default-len" style="max-width:14rem;">
+            <option value="0">No length (start time only)</option>
+            <option value="30">30 minutes</option>
+            <option value="60">1 hour</option>
+            <option value="90">1½ hours</option>
+            <option value="120">2 hours</option>
+          </select>
+        </div>
 
         <hr style="border:none;border-top:1px solid var(--border);margin:1.25rem 0;" />
         <div id="share-off">
@@ -806,6 +839,59 @@
     document.getElementById('full-generate-btn')?.addEventListener('click', generateFull);
     document.getElementById('full-revoke-btn')?.addEventListener('click', revokeFull);
 
+    // ── API keys ──
+    function whenLabel(iso) {
+      if (!iso) return 'never';
+      const d = new Date(/Z$|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso.replace(' ', 'T') + 'Z');
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+    async function loadApiKeys() {
+      const wrap = document.getElementById('api-keys-list');
+      let keys = [];
+      try { keys = await api('GET', '/api/keys'); } catch { return; }
+      wrap.textContent = '';
+      if (!keys.length) {
+        const p = document.createElement('p');
+        p.className = 'hint'; p.style.marginTop = '0';
+        p.textContent = 'No API keys yet.';
+        wrap.appendChild(p);
+        return;
+      }
+      for (const k of keys) {
+        const row = document.createElement('div');
+        row.className = 'cat-item';
+        const name = document.createElement('div');
+        name.className = 'cat-item-name';
+        name.textContent = k.name;
+        const meta = document.createElement('div');
+        meta.className = 'hint'; meta.style.marginTop = '2px';
+        meta.textContent = `${k.prefix}… · created ${whenLabel(k.created_at)} · last used ${whenLabel(k.last_used_at)}`;
+        name.appendChild(meta);
+        const del = document.createElement('button');
+        del.className = 'btn btn-sm btn-danger';
+        del.textContent = 'Revoke';
+        del.addEventListener('click', async () => {
+          if (!confirm(`Revoke "${k.name}"? Anything using it stops working immediately.`)) return;
+          try { await api('DELETE', '/api/keys/' + encodeURIComponent(k.id)); toast('Key revoked', 'ok'); loadApiKeys(); }
+          catch (e) { toast('Could not revoke: ' + e.message, 'err'); }
+        });
+        row.appendChild(name);
+        row.appendChild(del);
+        wrap.appendChild(row);
+      }
+    }
+    document.getElementById('api-key-create')?.addEventListener('click', async () => {
+      const input = document.getElementById('api-key-name');
+      try {
+        const created = await api('POST', '/api/keys', { name: input.value.trim() });
+        input.value = '';
+        document.getElementById('api-key-value').value = created.key;
+        document.getElementById('api-key-new').style.display = '';
+        toast('Key created — copy it now', 'ok');
+        loadApiKeys();
+      } catch (e) { toast(e.message, 'err'); }
+    });
+
     // ── Share keywords (auto-share by title) ──
     let shareKeywords = [];
     const KW_SUGGESTIONS = ['Game', 'Birthday', 'Graduation', 'Recital', 'Concert', 'Championship', 'Tournament', 'Ceremony'];
@@ -1021,6 +1107,7 @@
           // Stored as integer cents so a point is never worth 0.30000000000000004.
           point_value_cents: Math.round((parseFloat(document.getElementById('set-point-value').value) || 0) * 100),
           currency_symbol: document.getElementById('set-currency').value.trim() || '$',
+          default_event_minutes: parseInt(document.getElementById('set-default-len').value, 10),
         };
         const res = await api('PATCH', '/api/settings', body);
         wasPublic = body.is_public;
@@ -1698,6 +1785,7 @@
       buildImportPersonOptions();
       buildHolidayGrid(config.holidays || []);
       loadShareState();
+      loadApiKeys();
       shareKeywords = Array.isArray(config.shareKeywords) ? config.shareKeywords.slice() : [];
       renderKeywords();
 
@@ -1716,6 +1804,14 @@
       document.getElementById('set-point-value').value =
         config.pointValueCents ? (config.pointValueCents / 100).toFixed(2) : '';
       document.getElementById('set-currency').value = config.currencySymbol || '$';
+      {
+        // A value set through the API may not be one of the listed choices;
+        // show it rather than silently snapping to the nearest option.
+        const sel = document.getElementById('set-default-len');
+        const v = String(config.defaultEventMinutes ?? 60);
+        if (![...sel.options].some(o => o.value === v)) sel.add(new Option(`${v} minutes`, v));
+        sel.value = v;
+      }
       // Reflect the theme actually in effect (the 🎨 button on the calendar sets
       // localStorage only) so saving a settings change doesn't clobber a
       // locally-chosen theme back to the account default.

@@ -36,7 +36,8 @@ create table if not exists settings (
   is_public          integer not null default 0,          -- read-only public calendar?
   share_token        text,                                 -- secret for read-only share page + .ics feed
   share_keywords     text not null default '[]',          -- JSON array of title keywords that auto-share
-  full_share_token   text,                                 -- secret for the unfiltered .ics feed (every event)
+  full_share_token   text,
+  default_event_minutes integer not null default 60,      -- length given to events with no end time in .ics feeds; 0 = none                                 -- secret for the unfiltered .ics feed (every event)
   point_value_cents  integer not null default 0,          -- what one chore point is worth; 0 = points only, no money
   currency_symbol    text not null default '$',
   last_digest_date   text,                                -- household-local YYYY-MM-DD the digest last went out
@@ -165,3 +166,15 @@ create table if not exists push_config (
 create index if not exists events_date_idx on events (date);
 create index if not exists meals_date_idx on meals (date);
 create index if not exists todos_due_date_idx on todos (due_date);
+
+-- API keys: a way for scripts and other apps (a dashboard, an automation) to
+-- use the API without the household password. Only a SHA-256 of each key is
+-- stored; the key itself is shown once, when it's created.
+create table if not exists api_keys (
+  id            text primary key,
+  name          text not null,                          -- what it's for, e.g. "Homepage"
+  key_hash      text not null unique,                   -- sha256 hex of the full key
+  prefix        text not null,                          -- first characters, to tell keys apart in the list
+  created_at    text not null default (datetime('now')),
+  last_used_at  text
+);

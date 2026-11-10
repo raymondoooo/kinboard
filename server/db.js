@@ -69,7 +69,7 @@ function ensureColumn(table, column, definition) {
 // scheme report version 0 and may already have some columns from a pre-release
 // build, so schema steps go through ensureColumn rather than a bare ALTER.
 // A backup is taken before any migration runs on an existing database.
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 7;
 
 const MIGRATIONS = [
   {
@@ -130,6 +130,33 @@ const MIGRATIONS = [
       // never quietly widen what that existing link shows.
       ensureColumn('settings', 'full_share_token', 'text');
     },
+  },
+  {
+    version: 5,
+    describe: 'store every event time as HH:MM:SS',
+    up(db) {
+      // Typed-in events were saved as "19:30", imported ones as "19:30:00".
+      // New saves are normalized (validate.js toHms); this brings old rows
+      // in line so nothing has to cope with both shapes again.
+      for (const col of ['start_time', 'end_time']) {
+        const n = db.prepare(`UPDATE events SET ${col} = ${col} || ':00' WHERE length(${col}) = 5`).run().changes;
+        if (n) console.log(`[db] padded ${n} events.${col} values to HH:MM:SS`);
+      }
+    },
+  },
+  {
+    version: 6,
+    describe: 'a default length for events with no end time',
+    up() {
+      // Feeds wrote these as zero-length, which other calendar apps draw as a
+      // sliver. 60 minutes is what most apps assume for a new event.
+      ensureColumn('settings', 'default_event_minutes', 'integer not null default 60');
+    },
+  },
+  {
+    version: 7,
+    describe: 'API keys',
+    up() { /* api_keys is created by schema.sql (create table if not exists) */ },
   },
 ];
 
@@ -369,14 +396,18 @@ class QueryBuilder {
       const table = this.table;
       if (this.mode === 'insert') {
         const ids = [];
-        for (const row of this.insertRows) {
-          const withId = row.id ? row : { ...row, id: crypto.randomUUID() };
-          ids.push(withId.id);
-          const encoded = encodeRow(table, withId);
-          const cols = Object.keys(encoded);
-          const sql = `INSERT INTO ${table} (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`;
-          raw.prepare(sql).run(...cols.map((c) => encoded[c]));
-        }
+        // One transaction for the whole array: inserting several rows is all
+        // or nothing, never a partial batch left behind by a failure halfway.
+        raw.transaction(() => {
+          for (const row of this.insertRows) {
+            const withId = row.id ? row : { ...row, id: crypto.randomUUID() };
+            ids.push(withId.id);
+            const encoded = encodeRow(table, withId);
+            const cols = Object.keys(encoded);
+            const sql = `INSERT INTO ${table} (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`;
+            raw.prepare(sql).run(...cols.map((c) => encoded[c]));
+          }
+        })();
         if (!this.returning) return { data: null, error: null };
         const placeholders = ids.map(() => '?').join(',');
         const rows = raw.prepare(`SELECT * FROM ${table} WHERE id IN (${placeholders})`).all(...ids);

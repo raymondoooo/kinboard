@@ -35,4 +35,13 @@ function isValidTime(s) {
   return h >= 0 && h <= 23 && m >= 0 && m <= 59 && (sec === undefined || (sec >= 0 && sec <= 59));
 }
 
-module.exports = { THEMES, HEX_RE, cleanEmoji, isValidDate, isValidTime };
+// Times are stored as HH:MM:SS, always. Typed-in events used to arrive as
+// "19:30" from the browser's time input while imported ones were "19:30:00",
+// and the mix broke anything that compared or formatted them as strings (the
+// .ics feed wrote "T1930" for the short ones). Anything else passes through
+// untouched for isValidTime() to reject.
+function toHms(t) {
+  return typeof t === 'string' && /^\d{2}:\d{2}$/.test(t) ? `${t}:00` : t;
+}
+
+module.exports = { THEMES, HEX_RE, cleanEmoji, isValidDate, isValidTime, toHms };
