@@ -359,11 +359,12 @@ jobs:
         run: |
           # The share page is public and renders titles that can come straight
           # from a third-party iCal feed. One field there was interpolated raw.
+          # The pages' scripts live in public/*.js, so those are scanned too.
           python3 - <<'EOF'
           import re, glob, sys
           SAFE = re.compile(r'^\s*(esc|escapeHtml|encodeURIComponent|Number|parseInt|parseFloat)\s*\(')
           bad = []
-          for f in sorted(glob.glob('public/*.html')):
+          for f in sorted(glob.glob('public/*.html') + glob.glob('public/*.js')):
               src = open(f).read()
               for m in re.finditer(r'innerHTML\s*(?:\+)?=\s*`', src):
                   i = m.end(); j = i
@@ -383,6 +384,32 @@ jobs:
               [print("  " + b) for b in bad]
               sys.exit(1)
           print("all innerHTML interpolations are escaped")
+          EOF
+
+      - name: Pages must not use inline script
+        run: |
+          # The CSP allows scripts from the app's own files only, so an inline
+          # <script> or an onclick="…" would be blocked by the browser: the
+          # button would silently do nothing. Put code in public/*.js and attach
+          # handlers with addEventListener.
+          python3 - <<'EOF'
+          import re, glob, sys
+          bad = []
+          for f in sorted(glob.glob('public/*.html')):
+              src = open(f).read()
+              for m in re.finditer(r'<script\b(?![^>]*\bsrc=)[^>]*>', src):
+                  bad.append(f"{f}:{src.count(chr(10), 0, m.start()) + 1}: inline <script>")
+              for m in re.finditer(r'<[a-z][^>]*\son[a-z]+\s*=', src, re.I):
+                  bad.append(f"{f}:{src.count(chr(10), 0, m.start()) + 1}: inline event handler")
+          for f in sorted(glob.glob('public/*.js')):
+              for i, line in enumerate(open(f), 1):
+                  if re.search(r'''\son(click|change|input|submit|load|error|key\w+)\s*=\s*["'\\]''', line):
+                      bad.append(f"{f}:{i}: inline event handler in generated markup")
+          if bad:
+              print("FAIL: inline script is blocked by the CSP:")
+              [print("  " + b) for b in bad]
+              sys.exit(1)
+          print("no inline scripts or handlers")
           EOF
 
       - name: Calendar grid must not overflow horizontally
