@@ -79,18 +79,20 @@ process.on('uncaughtException', (err) => {
 
 // Event titles and locations come from other people's calendar feeds, so a
 // Content-Security-Policy is the safety net if any of that text is ever
-// rendered unescaped: an injected script could still run inline, but it
-// couldn't load anything from elsewhere or send anything anywhere. The pages
-// keep their scripts and click handlers inline, hence 'unsafe-inline' for now.
+// rendered unescaped: injected markup can't run script (inline or from
+// elsewhere), load anything from elsewhere, or send anything anywhere. Every
+// page's script lives in its own file under public/, and handlers are attached
+// with addEventListener, so script-src needs nothing but 'self' — keep it that
+// way. Styles stay 'unsafe-inline': the pages use style attributes throughout,
+// and CSS can't run script.
 // Helmet's defaults are off on purpose: its upgrade-insecure-requests would
-// break the plain-HTTP LAN installs the README supports, and its
-// script-src-attr 'none' would kill every onclick in the pages.
+// break the plain-HTTP LAN installs the README supports.
 app.use(helmet({
   contentSecurityPolicy: {
     useDefaults: false,
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'blob:'],
       // The weather card asks Open-Meteo straight from the browser.
