@@ -1,4 +1,6 @@
-require('dotenv').config();
+// Node reads .env itself now. Variables already set in the environment win,
+// as they did with dotenv; a missing file is normal (Docker installs have none).
+try { process.loadEnvFile(); } catch (err) { if (err.code !== 'ENOENT') throw err; }
 
 const fs = require('fs');
 const express = require('express');
