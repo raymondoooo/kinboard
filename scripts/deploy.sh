@@ -11,6 +11,11 @@
 #   scripts/deploy.sh             deploy main (refuses anything else)
 #   scripts/deploy.sh --branch    deploy the current branch anyway, on purpose
 #
+# When HEAD is exactly a release tag (v1.2.3), the build is stamped with that
+# version, as CI does, so Settings shows "1.2.3" instead of "1.2.3-dev". The
+# override has to pass it through:
+#   build: { context: ., args: { KINBOARD_VERSION: "${KINBOARD_VERSION:-}" } }
+#
 # Set KINBOARD_CONTAINER if your container isn't called "kinboard".
 set -euo pipefail
 
@@ -36,7 +41,11 @@ else
 fi
 
 want=$(node -p "require('./package.json').version" 2>/dev/null || sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' package.json | head -1)
-echo "deploy: building $want from $branch @ $(git rev-parse --short HEAD)"
+export KINBOARD_VERSION=""
+if tag=$(git describe --exact-match --tags --match 'v*' 2>/dev/null) && [ "${tag#v}" = "$want" ]; then
+  KINBOARD_VERSION="${tag#v}"
+fi
+echo "deploy: building ${KINBOARD_VERSION:-$want-dev} from $branch @ $(git rev-parse --short HEAD)"
 docker compose up -d --build
 
 for i in $(seq 1 60); do
