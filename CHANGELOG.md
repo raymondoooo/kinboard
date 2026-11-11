@@ -3,7 +3,7 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
-## [Unreleased]
+## [0.5.0] — 2026-11-11
 
 ### Added
 - **The same event on several days.** The add-event form has an "Also on"
@@ -33,7 +33,7 @@ means the shape of things can still change between minor releases.
   fixed in 0.4.0. Everything is now `HH:MM:SS`, and existing events are
   converted when you upgrade.
 
-## [0.4.0] — 2026-11-02
+## [0.4.0] — 2026-11-02 (never published as an image; its changes ship in 0.5.0)
 
 ### Added
 - **A full calendar feed, for your own apps.** Settings → Sharing now has a
@@ -460,7 +460,7 @@ Ran the stress tests flagged as unaudited after the last release:
   the manifest and an explicit app title.
 - **Notification titles were too long to read.** The daily digest led with the
   household name, which the push service already displays, so a lock screen
-  showed "Kinboard-DeChristie — today..." and nothing useful. It is now "Today",
+  showed "Kinboard-Smith — today..." and nothing useful. It is now "Today",
   or "Today · 3 events" when there's more than one.
 - **Push never worked on iPhones or iPads.** The default VAPID subject was
   `mailto:kinboard@localhost`. Apple validates that claim and rejects it with a
@@ -607,6 +607,6 @@ live iCal feed subscriptions, one-time calendar import, view-only share links
 with a `.ics` feed, optional public read-only mode, Web Push notifications with
 an ntfy/Discord/Slack webhook fallback, weather, and seven themes.
 
-[Unreleased]: https://github.com/raymondoooo/kinboard/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/raymondoooo/kinboard/compare/v0.5.0...HEAD
 [0.2.0]: https://github.com/raymondoooo/kinboard/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/raymondoooo/kinboard/releases/tag/v0.1.0

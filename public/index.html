@@ -1489,7 +1489,7 @@
   .todo-row.done .todo-title { text-decoration: line-through; opacity: 0.5; }
   .todo-person-dot { display: flex; align-items: center; flex-shrink: 0; }
   /* Must be allowed to shrink and must be capped: with several assignees the
-     joined list ("Jackie, Abbie, Hayden, Ray") is long, and as an unshrinkable
+     joined list ("Sam, Maya, Leo, Alex") is long, and as an unshrinkable
      item it starved .todo-title down to ~zero width, which then wrapped one
      character per line. The badges already identify who — this text is a
      secondary label, so truncating it is the right trade. */
@@ -1873,7 +1873,7 @@
     }
     /* margin-left:auto keeps the name pill pinned to the right edge whether it
        fits on the first line or wraps to its own second line. Without it, a
-       wrapped pill (multiple names are wider, e.g. "ABBIE, JACKIE") lands
+       wrapped pill (multiple names are wider, e.g. "MAYA, SAM") lands
        flush LEFT because flex rows start-align, so the label jumped sides
        depending on how many people were assigned. */
     .agenda-person { flex: 0 0 auto; font-size: 0.72rem; margin-left: auto; }
@@ -3138,8 +3138,8 @@ function eventsForDay(date) {
   }).sort((a, b) => {
     // All-day first, then chronological.
     //
-    // This used to group by assignee before time — all of Abbie's day, then
-    // all of Hunter's — on the theory that it kept one person's events
+    // This used to group by assignee before time — all of Maya's day, then
+    // all of Leo's — on the theory that it kept one person's events
     // together. In a household with four or five people it just shuffled the
     // day: 6PM, 8AM, 4PM, 6:30PM, 8:40AM down a single Thursday, because the
     // times were only sorted *within* each person's block. A day cell's whole
