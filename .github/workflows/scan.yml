@@ -5,6 +5,11 @@ name: Vulnerability scan
 # running" — with no cap. Dependabot doesn't cover this: it watches manifests,
 # not the published image, so a CVE in something baked into the base layer
 # (or vendored inside a tool like npm) never shows up there.
+#
+# Two images are scanned, because a red run means different things for each:
+# findings in the published image that main has already fixed mean "cut a
+# release"; findings in main too mean "something needs fixing". The summary
+# says which.
 on:
   schedule:
     - cron: '0 8 * * 1'   # Monday morning
@@ -14,7 +19,15 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: aquasecurity/trivy-action@master
+      - uses: actions/checkout@v7
+
+      - name: Build image from main
+        run: docker build -t kinboard:main .
+
+      - name: Scan the published image
+        id: published
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: raymondoooo/kinboard:latest
           severity: HIGH,CRITICAL
@@ -23,3 +36,44 @@ jobs:
           # end up ignoring the whole workflow, unpatched CVE or not.
           ignore-unfixed: true
           exit-code: '1'
+          output: published.txt
+
+      - name: Scan main
+        id: main
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: kinboard:main
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          output: main.txt
+          skip-setup-trivy: true
+
+      - name: Summary
+        env:
+          PUBLISHED: ${{ steps.published.outcome }}
+          MAIN: ${{ steps.main.outcome }}
+        run: |
+          if [ "$MAIN" != success ]; then
+            verdict="**Needs a fix.** main has findings, so a release alone won't clear them."
+          elif [ "$PUBLISHED" != success ]; then
+            verdict="**Needs a release.** The published image has findings that main has already fixed."
+          else
+            verdict="Clean. Neither image has fixable HIGH or CRITICAL findings."
+          fi
+          {
+            echo "## $verdict"
+            echo
+            echo "| Image | Fixable HIGH/CRITICAL |"
+            echo "|---|---|"
+            echo "| \`raymondoooo/kinboard:latest\` | $([ "$PUBLISHED" = success ] && echo none || echo found) |"
+            echo "| main | $([ "$MAIN" = success ] && echo none || echo found) |"
+            for f in published main; do
+              if [ -s "$f.txt" ]; then
+                echo; echo "<details><summary>$f</summary>"; echo; echo '```'; cat "$f.txt"; echo '```'; echo "</details>"
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "$verdict"
+          [ "$PUBLISHED" = success ] && [ "$MAIN" = success ]
