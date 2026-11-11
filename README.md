@@ -174,8 +174,8 @@ once, so copy it then — and send it as a bearer token:
 # Add an event
 curl -X POST https://kinboard.example/api/events \
   -H "Authorization: Bearer kb_…" -H "Content-Type: application/json" \
-  -d '{"title":"Abbie PT","date":"2026-10-14","allDay":false,
-       "startTime":"15:30","people":["Abbie"],"location":"TheraSport"}'
+  -d '{"title":"Maya PT","date":"2026-10-14","allDay":false,
+       "startTime":"15:30","people":["Maya"],"location":"Riverside Physio"}'
 
 # Read events (a month back to a year ahead, repeats expanded)
 curl https://kinboard.example/api/events -H "Authorization: Bearer kb_…"

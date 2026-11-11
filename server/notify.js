@@ -342,7 +342,7 @@ async function runDigest() {
 
   // Short on purpose. Every push service already shows which app sent this, so
   // leading with the household name repeated it and pushed the useful part off
-  // the end: "Kinboard-DeChristie — today..." was all a lock screen had room
+  // the end: "Kinboard-Smith — today..." was all a lock screen had room
   // for. The body carries the actual schedule; the title just says what it is.
   const title = 'Today';
 

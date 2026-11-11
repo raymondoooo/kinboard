@@ -726,7 +726,7 @@ async function fetchFeedEvents(feed, reqStart, reqEnd, memberColors = {}, person
 
   // Per-event person/color. Detection runs FIRST: a shared calendar that tags each
   // event in the title or notes colors it accordingly. People win over categories
-  // (description "Abbie\n[S]" → Abbie), then bare category tags ("Birthday" →
+  // (description "Maya\n[S]" → Maya), then bare category tags ("Birthday" →
   // Birthday). Only when nothing is found do we fall back to the feed's assigned
   // person/color (e.g. a one-kid TeamSnap feed). Scans title + description only —
   // never organizer / attendee, whose service-account emails contain noise.
