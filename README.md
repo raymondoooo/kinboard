@@ -118,6 +118,30 @@ becomes household-wide and repeated typos can lock everyone out for a few minute
 
 Also set `SECURE_COOKIES=true` once you're on HTTPS.
 
+### Locking the container down
+
+The app itself always runs as the unprivileged `node` user (uid 1000). By
+default the container starts as root just long enough to make the data folder
+writable, then drops to `node`. If you'd rather it never runs as root at all,
+make the folder yours first and start it as uid 1000:
+
+```sh
+mkdir -p data && sudo chown -R 1000:1000 data
+```
+
+```yaml
+services:
+  kinboard:
+    user: "1000:1000"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+```
+
+Started that way it skips the ownership fix, so a data folder uid 1000 can't
+write to stops it at startup.
+
 ### Forgotten the household password?
 
 There's no email recovery — Kinboard has no mail server and no accounts. Since you own the
