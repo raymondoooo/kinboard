@@ -3,6 +3,28 @@
 Notable changes to Kinboard. Versions follow [SemVer](https://semver.org); `0.x`
 means the shape of things can still change between minor releases.
 
+## [0.6.0] — 2026-11-11
+
+### Security
+- **A Content-Security-Policy is on, and scripts load only from Kinboard's own
+  files.** Every page's inline script moved into its own file, so the policy
+  can refuse inline script entirely. If an event title from a subscribed
+  calendar ever slipped through unescaped, the browser would still not run it.
+- **The container can run without root.** It used to start as root to fix the
+  data folder's owner and then drop to the `node` user. If you start it as
+  `user: "1000:1000"`, it now skips that step, so `read_only: true` and
+  `cap_drop: [ALL]` work. See "Locking the container down" in the README.
+
+### Changed
+- **`.env` is read by Node itself.** The `dotenv` package is gone; nothing
+  changes for you.
+- Updated `web-push` to 4.0.0 and `node-ical` to 0.27.5.
+
+### Internal
+- API tests for login, share links, API keys and events.
+- The weekly scan also checks an image built from `main`, so a red result says
+  whether it needs a fix or only a release.
+
 ## [0.5.0] — 2026-11-11
 
 ### Added
@@ -607,6 +629,6 @@ live iCal feed subscriptions, one-time calendar import, view-only share links
 with a `.ics` feed, optional public read-only mode, Web Push notifications with
 an ntfy/Discord/Slack webhook fallback, weather, and seven themes.
 
-[Unreleased]: https://github.com/raymondoooo/kinboard/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/raymondoooo/kinboard/compare/v0.6.0...HEAD
 [0.2.0]: https://github.com/raymondoooo/kinboard/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/raymondoooo/kinboard/releases/tag/v0.1.0
